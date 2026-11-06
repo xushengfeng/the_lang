@@ -78,7 +78,8 @@ cargo run --bin alethe -- examples/checks.alt
 14. [组件命名与职责](docs/14-roles.md)
 15. [函数式默认复制、性能与原地修改](docs/15-functional-performance.md)
 16. [编译器、检查器、VM 到底是什么](docs/16-compiler-architecture.md)
-17. [决策记录与开放问题](docs/09-decisions.md)
+17. [业务代码、类型证明、优化：文件与数据流](docs/17-dataflow.md)
+18. [决策记录与开放问题](docs/09-decisions.md)
 
 ## 模型优先
 
