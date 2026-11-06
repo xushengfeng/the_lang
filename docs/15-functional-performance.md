@@ -376,3 +376,63 @@ set_frame_nat :
 
 这仍然是 `ProofModel`，不是 `OwnershipChecker` / `Lowering` / `BytecodeVM` 的验证。  
 但它已经把“任意位置 + 唯一性 ⇒ 原地更新对其它位置不可见”证成了内核定理。
+
+---
+
+## 11. Borrow 权限模型（已机器检查）
+
+`ProofModel` 里现在也加了最小 borrow 权限模型：
+
+```text
+Perm p : Loc -> Nat
+  0 = free
+  1 = shared borrow
+  2 = mutable borrow
+
+Free p l      := p l = 0
+Borrow p l    := p l = 1
+BorrowMut p l := p l = 2
+CanRead p l   := p l ≠ 0
+CanWrite p l  := BorrowMut p l
+```
+
+proof-carrying 读写：
+
+```text
+read_with  : Perm -> Loc -> Heap -> Store -> CanRead p l -> Array
+write_with : Perm -> Loc -> Heap -> Store -> Nat -> Nat
+             -> BorrowMut p l -> Store
+```
+
+检查通过的定理：
+
+```text
+borrow_not_mut      : Borrow p l -> BorrowMut p l -> False
+borrow_not_free     : Borrow p l -> Free p l -> False
+borrow_mut_not_free : BorrowMut p l -> Free p l -> False
+borrow_can_read     : Borrow p l -> CanRead p l
+borrow_mut_can_read : BorrowMut p l -> CanRead p l
+borrow_cannot_write : Borrow p l -> CanWrite p l -> False
+borrow_mut_can_write: BorrowMut p l -> CanWrite p l
+```
+
+含义：
+
+- 共享借用只读；写需要 `BorrowMut`；
+- 共享借用和可变借用互斥；
+- 可变借用存在时，位置不是 free，不能再获取可变借用；
+- `read_with`/`write_with` 的权限证明参数在运行时擦除，只由类型检查约束。
+
+当前限制：
+
+- 还没有 `acquire`/`release` 状态转移；
+- 共享借用没有计数（状态只表示“有共享借用”，不表示几个）；
+- 没有区域/生命周期；
+- 没有和 `set_frame_nat` 的堆唯一性模型合并。
+
+下一步：
+
+1. `acquire_borrow` / `acquire_borrow_mut` / `release`，用 `update_perm` 证明 frame；
+2. 共享借用计数（`p l = 1 + n` 或单独的计数状态）；
+3. 区域/生命周期，把 borrow 限制在 `r` 内；
+4. 把 `write_with` 与 `set_frame_nat` 组合，得到“可变借用下原地写安全”。

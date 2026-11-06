@@ -71,7 +71,9 @@
   - `set_result_same`：原地/纯返回同一数组；
   - `set_frame`：`Unique h` 下更新第一个位置对第二个观察者不可见；
 - [x] 推广到任意位置/数组 id（`Nat` 索引，归纳证明 `update_at_other`）；
-- [ ] `borrow_mut`、区域/drop；
+- [x] `Borrow`/`BorrowMut` 权限模型（互斥、只读/可写、proof-carrying read/write）；
+- [ ] `acquire`/`release`、共享借用计数；
+- [ ] 区域/drop 与生命周期；
 - [ ] 真实 lowering 的等价证明/翻译验证。
 
 验收：

@@ -103,6 +103,7 @@ cargo run --bin alethe -- examples/checks.alt
 | 字节码验证 | ✅ 义务 | ❌ |
 | 证明擦除 | ✅ 规格 | ⚠️ 仅 proof 参数 |
 | 原地精化证明 | ✅ `Bool2` + `Nat` 模型已检查 | ❌ 真实 lowering |
+| Borrow/BorrowMut 权限 | ✅ 互斥/只读/可写已检查 | ⚠️ 无 acquire/release/区域 |
 | 编译正确性 | ✅ 义务 | ❌ |
 | 闭包/异常/并发 | 后续 | ❌ |
 
@@ -123,7 +124,12 @@ cargo run --bin alethe -- examples/checks.alt
   - `set_frame`：`Unique h` 下原地更新第一个位置对第二个观察者不可见；
 - 任意 `Nat` 位置模型的内核证明（归纳，不是枚举）：
   - `set_result_same_nat`；
-  - `set_frame_nat`：`UniqueNat h` 下原地更新对任意其它位置不可见。
+  - `set_frame_nat`：`UniqueNat h` 下原地更新对任意其它位置不可见；
+- Borrow 权限模型的内核证明：
+  - `borrow_not_mut`：共享/可变借用互斥；
+  - `borrow_cannot_write`：共享借用只读；
+  - `borrow_can_read` / `borrow_mut_can_write`；
+  - `read_with` / `write_with` 的 proof-carrying 接口。
 
 **下一步**
 
