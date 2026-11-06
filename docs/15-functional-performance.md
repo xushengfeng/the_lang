@@ -254,6 +254,9 @@ set_in_place(a,i,v) ≈ set_pure(a,i,v)
 
 代码：`src/ownership_proof.rs`；demo：`cargo run --bin ownership_proof_demo`。
 
+**这是 `ProofModel`，不是 `OwnershipChecker`。**  
+它由 `proofcheck` 在构建/开发阶段检查；`OwnershipChecker`、`Lowering`、`BytecodeVM` 都没有被这个证明覆盖。运行时不做验证；VM 的统计只是测试观察。
+
 为了不把内核扩成完整堆逻辑，先用一个**两位置模型**把核心条件证出来：
 
 ```text
@@ -301,6 +304,8 @@ set_frame :
 ```
 
 这不是完整堆模型，但它把“唯一性 ⇒ 原地更新不改变其他观察者”变成了内核检查的定理。  
+两位置的 `Bool.rec` 只是最小基例；多位置应使用**索引上的结构归纳**（`update_at_other`），不是枚举所有位置。
+
 下一步可以把它推广到：
 
 - 任意数量的位置/数组 id；

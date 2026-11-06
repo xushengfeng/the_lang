@@ -2,6 +2,20 @@
 
 “checker” 现在被用来指太多东西：类型检查、所有权、借用、区域、效果、精化、证明检查。继续这样会混淆。本文给每个职责一个固定名字，并规定命名规则。
 
+## 0. “模型”这个词也要禁用
+
+“模型”现在至少指四样东西，必须分开叫：
+
+| 名字 | 指什么 | 谁检查 |
+|---|---|---|
+| **ProofModel** | `src/ownership_proof.rs` 里的形式化定义/定理（堆、store、Unique、set_pure/set_in_place） | `proofcheck`（内核） |
+| **OwnershipChecker** | `src/ownership.rs` 的 Rust 静态分析（owncheck/borrowck 原型） | 无形式证明；测试 |
+| **Lowering** | `ownlower` 的原地/复制决策 | 无形式证明；测试/待翻译验证 |
+| **BytecodeVM** | `src/vm.rs` 的字节码执行 | 无形式证明；测试 |
+| **DesignSpec** | `docs/11`–`docs/15` 的规则/义务 | 不是机器检查对象 |
+
+以后不要单独说“模型”。说 `ProofModel` / `OwnershipChecker` / `Lowering` / `BytecodeVM` / `DesignSpec`。
+
 ## 1. 总流水线
 
 ```text
