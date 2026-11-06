@@ -39,6 +39,7 @@ pub struct FnSig {
 pub struct CheckedFn {
     pub name: String,
     pub params: Vec<String>,
+    pub param_tys: Vec<Ty>,
     pub ret: Ty,
     pub body: Expr,
 }
@@ -220,18 +221,19 @@ impl Checker {
             }
         }
 
-        let params = f
-            .params
-            .iter()
-            .filter_map(|p| match p.kind {
-                ParamKind::Runtime(_) => Some(p.name.clone()),
-                ParamKind::Proof(_) => None,
-            })
-            .collect();
+        let mut params = Vec::new();
+        let mut param_tys = Vec::new();
+        for p in &f.params {
+            if let ParamKind::Runtime(ty) = &p.kind {
+                params.push(p.name.clone());
+                param_tys.push(ty.clone());
+            }
+        }
 
         Ok(CheckedFn {
             name: f.name.clone(),
             params,
+            param_tys,
             ret: f.ret.clone(),
             body,
         })
@@ -298,6 +300,11 @@ impl Checker {
                     BinOp::Eq | BinOp::Ne => {
                         if lt != rt {
                             return Err(format!("cannot compare `{lt}` with `{rt}`"));
+                        }
+                        if lt != Ty::Int {
+                            return Err(format!(
+                                "`==`/`!=` currently only supported for Int, got `{lt}`"
+                            ));
                         }
                         Ok((Ty::Bool, Expr::Bin(*op, Box::new(lc), Box::new(rc))))
                     }

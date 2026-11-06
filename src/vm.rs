@@ -7,7 +7,7 @@
 //! checker, so the VM never sees a proof value.  `set`/`push` arrive as
 //! `__set_in_place` / `__set_copy` and are compiled to bytecode variants.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::ownership::{CheckedFn, CheckedProgram, Stats, Value};
 use crate::syntax::{BinOp, CallArg, Expr, UnOp};
@@ -46,10 +46,32 @@ pub enum Instr {
     Halt,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BType {
+    Int,
+    Bool,
+    Unit,
+    Array(Box<BType>),
+}
+
+impl BType {
+    pub fn from_ty(ty: &crate::syntax::Ty) -> Result<Self, String> {
+        match ty {
+            crate::syntax::Ty::Int => Ok(BType::Int),
+            crate::syntax::Ty::Bool => Ok(BType::Bool),
+            crate::syntax::Ty::Unit => Ok(BType::Unit),
+            crate::syntax::Ty::Array(t) => Ok(BType::Array(Box::new(Self::from_ty(t)?))),
+            crate::syntax::Ty::Prop => Err("Prop must be erased before bytecode".to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BcFunction {
     pub name: String,
     pub arity: usize,
+    pub param_tys: Vec<BType>,
+    pub ret: BType,
     pub nlocals: usize,
     pub code: Vec<Instr>,
 }
@@ -101,9 +123,17 @@ fn compile_fn(f: &CheckedFn, index: &HashMap<String, usize>) -> Result<BcFunctio
     c.emit(&f.body)
         .map_err(|e| format!("while compiling `{}`:\n{e}", f.name))?;
     c.code.push(Instr::Ret);
+    let param_tys = f
+        .param_tys
+        .iter()
+        .map(BType::from_ty)
+        .collect::<Result<Vec<_>, _>>()?;
+    let ret = BType::from_ty(&f.ret)?;
     Ok(BcFunction {
         name: f.name.clone(),
         arity: f.params.len(),
+        param_tys,
+        ret,
         nlocals: c.next_slot,
         code: c.code,
     })
@@ -321,6 +351,342 @@ struct Frame {
     pc: usize,
     locals: Vec<Value>,
     stack: Vec<Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Bytecode verifier
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum LocalState {
+    Uninit,
+    Init(BType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct VState {
+    stack: Vec<BType>,
+    locals: Vec<LocalState>,
+}
+
+fn join_states(a: &VState, b: &VState) -> Result<VState, String> {
+    if a.stack.len() != b.stack.len() {
+        return Err(format!(
+            "stack height mismatch at merge: {} vs {}",
+            a.stack.len(),
+            b.stack.len()
+        ));
+    }
+    for (i, (x, y)) in a.stack.iter().zip(&b.stack).enumerate() {
+        if x != y {
+            return Err(format!(
+                "stack type mismatch at merge depth {i}: {x:?} vs {y:?}"
+            ));
+        }
+    }
+    if a.locals.len() != b.locals.len() {
+        return Err("local count mismatch at merge".to_string());
+    }
+    let mut locals = Vec::with_capacity(a.locals.len());
+    for (i, (x, y)) in a.locals.iter().zip(&b.locals).enumerate() {
+        let merged = match (x, y) {
+            (LocalState::Init(t1), LocalState::Init(t2)) if t1 == t2 => {
+                LocalState::Init(t1.clone())
+            }
+            (LocalState::Init(_), LocalState::Init(_)) => {
+                return Err(format!("local {i} has different types on merge"))
+            }
+            _ => LocalState::Uninit,
+        };
+        locals.push(merged);
+    }
+    Ok(VState {
+        stack: a.stack.clone(),
+        locals,
+    })
+}
+
+fn pop_any(stack: &mut Vec<BType>, pc: usize) -> Result<BType, String> {
+    stack
+        .pop()
+        .ok_or_else(|| format!("pc {pc}: stack underflow"))
+}
+
+fn pop_expect(stack: &mut Vec<BType>, pc: usize, expected: BType) -> Result<(), String> {
+    let actual = pop_any(stack, pc)?;
+    if actual != expected {
+        Err(format!(
+            "pc {pc}: expected {expected:?} on stack, got {actual:?}"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn step(
+    func: &BcFunction,
+    pc: usize,
+    instr: &Instr,
+    state: &VState,
+    prog: &BcProgram,
+) -> Result<Vec<(usize, VState)>, String> {
+    let mut st = state.clone();
+    let mut succs = Vec::new();
+    match instr {
+        Instr::PushInt(_) => st.stack.push(BType::Int),
+        Instr::PushBool(_) => st.stack.push(BType::Bool),
+        Instr::PushUnit => st.stack.push(BType::Unit),
+        Instr::Load(slot) => {
+            if *slot >= st.locals.len() {
+                return Err(format!("pc {pc}: load from invalid slot {slot}"));
+            }
+            match &st.locals[*slot] {
+                LocalState::Init(t) => st.stack.push(t.clone()),
+                LocalState::Uninit => {
+                    return Err(format!("pc {pc}: load from uninitialized slot {slot}"))
+                }
+            }
+        }
+        Instr::Store(slot) => {
+            if *slot >= st.locals.len() {
+                return Err(format!("pc {pc}: store to invalid slot {slot}"));
+            }
+            let t = pop_any(&mut st.stack, pc)?;
+            if let LocalState::Init(old) = &st.locals[*slot] {
+                if *old != t {
+                    return Err(format!(
+                        "pc {pc}: slot {slot} already holds {old:?}, storing {t:?}"
+                    ));
+                }
+            }
+            st.locals[*slot] = LocalState::Init(t);
+        }
+        Instr::Add | Instr::Sub | Instr::Mul => {
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            st.stack.push(BType::Int);
+        }
+        Instr::Div { .. } | Instr::Mod { .. } => {
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            st.stack.push(BType::Int);
+        }
+        Instr::Neg => {
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            st.stack.push(BType::Int);
+        }
+        Instr::Eq | Instr::Ne | Instr::Lt | Instr::Le | Instr::Gt | Instr::Ge => {
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            st.stack.push(BType::Bool);
+        }
+        Instr::Not => {
+            pop_expect(&mut st.stack, pc, BType::Bool)?;
+            st.stack.push(BType::Bool);
+        }
+        Instr::Jump(t) => succs.push((*t, st.clone())),
+        Instr::JumpIfFalse(t) => {
+            pop_expect(&mut st.stack, pc, BType::Bool)?;
+            succs.push((*t, st.clone()));
+            succs.push((pc + 1, st.clone()));
+        }
+        Instr::Call { func: f, argc } => {
+            let target = prog
+                .funcs
+                .get(*f)
+                .ok_or_else(|| format!("pc {pc}: call to invalid function {f}"))?;
+            if *argc != target.arity || *argc != target.param_tys.len() {
+                return Err(format!(
+                    "pc {pc}: call argc {argc} does not match `{}` arity {}",
+                    target.name, target.arity
+                ));
+            }
+            let mut args = Vec::with_capacity(*argc);
+            for _ in 0..*argc {
+                args.push(pop_any(&mut st.stack, pc)?);
+            }
+            args.reverse();
+            for (i, (actual, expected)) in args.iter().zip(&target.param_tys).enumerate() {
+                if actual != expected {
+                    return Err(format!(
+                        "pc {pc}: argument {i} of `{}` has type {actual:?}, expected {expected:?}",
+                        target.name
+                    ));
+                }
+            }
+            st.stack.push(target.ret.clone());
+        }
+        Instr::Ret => {
+            if st.stack.len() != 1 {
+                return Err(format!(
+                    "pc {pc}: ret expects exactly one value, stack has {}",
+                    st.stack.len()
+                ));
+            }
+            let actual = st.stack[0].clone();
+            if actual != func.ret {
+                return Err(format!(
+                    "pc {pc}: ret returns {actual:?}, expected {:?}",
+                    func.ret
+                ));
+            }
+        }
+        Instr::MakeArray(n) => {
+            if *n == 0 {
+                return Err(format!(
+                    "pc {pc}: empty array literal needs an explicit type"
+                ));
+            }
+            let mut tys = Vec::with_capacity(*n);
+            for _ in 0..*n {
+                tys.push(pop_any(&mut st.stack, pc)?);
+            }
+            let first = tys[0].clone();
+            if tys.iter().any(|t| *t != first) {
+                return Err(format!("pc {pc}: array elements have different types"));
+            }
+            st.stack.push(BType::Array(Box::new(first)));
+        }
+        Instr::ArrayGet { .. } => {
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            let arr = pop_any(&mut st.stack, pc)?;
+            match arr {
+                BType::Array(t) => st.stack.push(*t),
+                other => return Err(format!("pc {pc}: array get on non-array {other:?}")),
+            }
+        }
+        Instr::ArraySet { .. } => {
+            let value_ty = pop_any(&mut st.stack, pc)?;
+            pop_expect(&mut st.stack, pc, BType::Int)?;
+            let arr = pop_any(&mut st.stack, pc)?;
+            match arr {
+                BType::Array(t) => {
+                    if *t != value_ty {
+                        return Err(format!(
+                            "pc {pc}: set value type {value_ty:?}, expected {t:?}"
+                        ));
+                    }
+                    st.stack.push(BType::Array(t));
+                }
+                other => return Err(format!("pc {pc}: set on non-array {other:?}")),
+            }
+        }
+        Instr::ArrayPush { .. } => {
+            let value_ty = pop_any(&mut st.stack, pc)?;
+            let arr = pop_any(&mut st.stack, pc)?;
+            match arr {
+                BType::Array(t) => {
+                    if *t != value_ty {
+                        return Err(format!(
+                            "pc {pc}: push value type {value_ty:?}, expected {t:?}"
+                        ));
+                    }
+                    st.stack.push(BType::Array(t));
+                }
+                other => return Err(format!("pc {pc}: push on non-array {other:?}")),
+            }
+        }
+        Instr::Len => {
+            let arr = pop_any(&mut st.stack, pc)?;
+            match arr {
+                BType::Array(_) => st.stack.push(BType::Int),
+                other => return Err(format!("pc {pc}: len on non-array {other:?}")),
+            }
+        }
+        Instr::Print => {
+            pop_any(&mut st.stack, pc)?;
+        }
+        Instr::Pop => {
+            pop_any(&mut st.stack, pc)?;
+        }
+        Instr::Halt => {
+            if st.stack.is_empty() {
+                return Err(format!("pc {pc}: halt with empty stack"));
+            }
+        }
+    }
+
+    // Non-terminal instructions fall through to the next instruction.
+    if !matches!(
+        instr,
+        Instr::Ret | Instr::Halt | Instr::Jump(_) | Instr::JumpIfFalse(_)
+    ) {
+        succs.push((pc + 1, st));
+    }
+    Ok(succs)
+}
+
+fn verify_function(func: &BcFunction, prog: &BcProgram) -> Result<(), String> {
+    if func.arity != func.param_tys.len() {
+        return Err(format!(
+            "{}: arity {} != param type count {}",
+            func.name,
+            func.arity,
+            func.param_tys.len()
+        ));
+    }
+    if func.nlocals < func.arity {
+        return Err(format!(
+            "{}: nlocals {} < arity {}",
+            func.name, func.nlocals, func.arity
+        ));
+    }
+    if func.code.is_empty() {
+        return Err(format!("{}: empty code", func.name));
+    }
+
+    let mut locals = vec![LocalState::Uninit; func.nlocals];
+    for (i, t) in func.param_tys.iter().enumerate() {
+        locals[i] = LocalState::Init(t.clone());
+    }
+    let initial = VState {
+        stack: Vec::new(),
+        locals,
+    };
+
+    let mut states: Vec<Option<VState>> = vec![None; func.code.len()];
+    states[0] = Some(initial);
+    let mut work = VecDeque::new();
+    work.push_back(0usize);
+
+    while let Some(pc) = work.pop_front() {
+        let state = states[pc].clone().unwrap();
+        let instr = func.code[pc].clone();
+        let succs =
+            step(func, pc, &instr, &state, prog).map_err(|e| format!("{}: {e}", func.name))?;
+        for (target, next) in succs {
+            if target >= func.code.len() {
+                return Err(format!(
+                    "{}: pc {pc}: jump/call target {target} out of range (len {})",
+                    func.name,
+                    func.code.len()
+                ));
+            }
+            match &states[target] {
+                None => {
+                    states[target] = Some(next);
+                    work.push_back(target);
+                }
+                Some(old) => {
+                    let merged = join_states(old, &next)
+                        .map_err(|e| format!("{}: merge at pc {target}: {e}", func.name))?;
+                    if merged != *old {
+                        states[target] = Some(merged);
+                        work.push_back(target);
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Verify stack/local/jump/call/array types before running.
+pub fn verify(prog: &BcProgram) -> Result<(), String> {
+    for func in &prog.funcs {
+        verify_function(func, prog)?;
+    }
+    Ok(())
 }
 
 pub fn run(prog: &BcProgram, entry: usize) -> Result<VmResult, String> {
@@ -667,11 +1033,26 @@ mod tests {
     use super::*;
     use crate::ownership::{check_source, run as interp_run};
 
+    fn one_func(code: Vec<Instr>, ret: BType) -> BcProgram {
+        BcProgram {
+            funcs: vec![BcFunction {
+                name: "bad".into(),
+                arity: 0,
+                param_tys: vec![],
+                ret,
+                nlocals: 1,
+                code,
+            }],
+            main: 0,
+        }
+    }
+
     #[test]
     fn vm_runs_ownership_demo() {
         let src = std::fs::read_to_string("examples/ownership.alt").unwrap();
         let checked = check_source(&src).unwrap();
         let bc = compile(&checked).unwrap();
+        verify(&bc).unwrap();
         let r = run(&bc, bc.main).unwrap();
         assert_eq!(r.value.to_string(), "30");
         assert_eq!(r.stats.in_place, 2);
@@ -692,6 +1073,64 @@ mod tests {
         assert_eq!(vm.stats.copies, interp.stats.copies);
         assert_eq!(vm.stats.in_place, interp.stats.in_place);
         assert_eq!(vm.stats.bounds_checks, interp.stats.bounds_checks);
+    }
+
+    #[test]
+    fn verifier_rejects_stack_underflow() {
+        let bc = one_func(vec![Instr::Add, Instr::Ret], BType::Int);
+        let err = verify(&bc).unwrap_err();
+        assert!(err.contains("underflow"), "{err}");
+    }
+
+    #[test]
+    fn verifier_rejects_wrong_return_type() {
+        let bc = one_func(vec![Instr::PushBool(true), Instr::Ret], BType::Int);
+        let err = verify(&bc).unwrap_err();
+        assert!(err.contains("ret returns"), "{err}");
+    }
+
+    #[test]
+    fn verifier_rejects_bad_jump() {
+        let bc = one_func(vec![Instr::Jump(99)], BType::Unit);
+        let err = verify(&bc).unwrap_err();
+        assert!(err.contains("out of range"), "{err}");
+    }
+
+    #[test]
+    fn verifier_rejects_uninitialized_local() {
+        let bc = one_func(vec![Instr::Load(0), Instr::Ret], BType::Int);
+        let err = verify(&bc).unwrap_err();
+        assert!(err.contains("uninitialized"), "{err}");
+    }
+
+    #[test]
+    fn verifier_rejects_wrong_call_argument() {
+        let callee = BcFunction {
+            name: "callee".into(),
+            arity: 1,
+            param_tys: vec![BType::Int],
+            ret: BType::Int,
+            nlocals: 1,
+            code: vec![Instr::Load(0), Instr::Ret],
+        };
+        let caller = BcFunction {
+            name: "caller".into(),
+            arity: 0,
+            param_tys: vec![],
+            ret: BType::Int,
+            nlocals: 0,
+            code: vec![
+                Instr::PushBool(true),
+                Instr::Call { func: 0, argc: 1 },
+                Instr::Ret,
+            ],
+        };
+        let bc = BcProgram {
+            funcs: vec![callee, caller],
+            main: 1,
+        };
+        let err = verify(&bc).unwrap_err();
+        assert!(err.contains("argument"), "{err}");
     }
 
     #[test]

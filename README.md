@@ -102,7 +102,7 @@ cargo run --bin alethe -- examples/checks.alt
 | 结构体/变体/切片 | ✅ 类型 | ❌ |
 | 字节码语法/栈类型 | ✅ 规格 | ✅ 实现（无验证器） |
 | 堆/帧/小步语义 | ✅ 规格 | ❌ |
-| 字节码验证 | ✅ 义务 | ❌ |
+| 字节码验证 | ✅ 义务 | ✅ 栈/局部/跳转/调用/数组类型 |
 | 证明擦除 | ✅ 规格 | ⚠️ 仅 proof 参数 |
 | 原地精化证明 | ✅ `Bool2` + `Nat` 模型已检查 | ❌ 真实 lowering |
 | Borrow/BorrowMut 权限 | ✅ 互斥/只读/可写已检查 | ⚠️ 无 acquire/release/区域 |
@@ -120,7 +120,8 @@ cargo run --bin alethe -- examples/checks.alt
 - 两个 `sum` 实现的计算结果一致；
 - `own` / `borrow` / unique 检查：use-after-move、借用逃逸、把借用 move 进 `own` 参数都会被拒绝；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
-- 栈式 VM：`source → ownership check/lowering → bytecode → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
+- 栈式 VM：`source → ownership check/lowering → bytecode → verify → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
+- 字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组操作；错误字节码被拒绝；
 - 最小所有权模型（两位置堆）的内核证明：
   - `set_result_same`：原地/纯返回同一数组；
   - `set_frame`：`Unique h` 下原地更新第一个位置对第二个观察者不可见；

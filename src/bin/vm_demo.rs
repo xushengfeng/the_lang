@@ -8,7 +8,7 @@ use std::env;
 use std::fs;
 
 use alethe::ownership::check_source;
-use alethe::vm::{compile, disassemble, run};
+use alethe::vm::{compile, disassemble, run, verify};
 
 fn main() {
     let mut args = env::args().skip(1);
@@ -42,6 +42,12 @@ fn main() {
     if dump {
         println!("{}", disassemble(&bc));
     }
+
+    if let Err(e) = verify(&bc) {
+        eprintln!("bytecode verification failed:\n{e}");
+        std::process::exit(1);
+    }
+    println!("bytecode verification passed");
 
     match run(&bc, bc.main) {
         Ok(r) => {
