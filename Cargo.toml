@@ -1,0 +1,28 @@
+[package]
+name = "alethe"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "alethe"
+path = "src/lib.rs"
+
+[[bin]]
+name = "alethe"
+path = "src/main.rs"
+
+[[bin]]
+name = "sum_demo"
+path = "src/bin/sum_demo.rs"
+
+[[bin]]
+name = "ownership_demo"
+path = "src/bin/ownership_demo.rs"
+
+[[bin]]
+name = "vm_demo"
+path = "src/bin/vm_demo.rs"
+
+[profile.release]
+opt-level = 3
+lto = true

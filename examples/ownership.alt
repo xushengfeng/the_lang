@@ -1,0 +1,47 @@
+// own / borrow / unique prototype.
+//
+// `own` parameters are uniquely owned and may be updated in place.
+// `borrow` parameters are read-only and may not escape.
+// Locals bound to fresh arrays are inferred unique.
+
+fn fill(own a: Array<Int>, x: Int) -> Array<Int> {
+  set(a, 0, x)
+}
+
+fn fill_shared(a: Array<Int>, x: Int) -> Array<Int> {
+  set(a, 0, x)
+}
+
+fn local_in_place() -> Int {
+  let a = [1, 2, 3];
+  let b = set(a, 0, 9);
+  print(b);
+  b[0]
+}
+
+fn local_copy() -> Int {
+  let a = [1, 2, 3];
+  let b = set(a, 0, 9);
+  print(a);
+  print(b);
+  b[0]
+}
+
+fn read_borrow(borrow a: Array<Int>) -> Int {
+  a[0] + a[1] + a[2]
+}
+
+fn main() -> Int {
+  let a = [1, 2, 3];
+  let b = fill(a, 9);
+  let c = fill_shared(b, 7);
+  print(b);
+  print(c);
+  let d = read_borrow(c);
+  print(d);
+  let e = local_in_place();
+  let f = local_copy();
+  print(e);
+  print(f);
+  d + e + f
+}

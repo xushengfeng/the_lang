@@ -1,0 +1,73 @@
+// Vertical slice: proof-directed check elimination and proof erasure.
+
+fn div(a: Int, b: Int) -> Int
+  requires b != 0
+{
+  a / b
+}
+
+fn div_plain(a: Int, b: Int) -> Int {
+  a / b
+}
+
+fn get(a: Array<Int>, i: Int) -> Int
+  requires 0 <= i && i < len(a)
+{
+  a[i]
+}
+
+fn get_plain(a: Array<Int>, i: Int) -> Int {
+  a[i]
+}
+
+fn get_proof(a: Array<Int>, i: Int, h: proof 0 <= i && i < len(a)) -> Int {
+  a[i]
+}
+
+fn get_branch(a: Array<Int>, i: Int) -> Int {
+  if 0 <= i && i < len(a) then a[i] else 0 - 1
+}
+
+fn fill(own a: Array<Int>, x: Int) -> Array<Int> {
+  set(a, 0, x)
+}
+
+fn fill_shared(a: Array<Int>, x: Int) -> Array<Int> {
+  set(a, 0, x)
+}
+
+fn main() -> Int {
+  let a = [10, 20, 30];
+  let x = div(10, 2);
+  let y = get(a, 1);
+  let z = get_proof(a, 2);
+  let w = get_branch(a, 0);
+  let p = get_plain(a, 1);
+  let q = div_plain(10, 2);
+  let b = fill(a, 9);
+  let c = fill_shared(b, 7);
+  print(x);
+  print(y);
+  print(z);
+  print(w);
+  print(p);
+  print(q);
+  print(c);
+  x + y + z + w + p + q
+}
+
+theorem nonzero_refl: forall b: Int. b != 0 -> b != 0 {
+  intro b;
+  intro h;
+  exact h
+}
+
+theorem and_intro: forall a: Int. forall b: Int. a != 0 -> b != 0 -> (a != 0 && b != 0) {
+  intro a;
+  intro b;
+  intro ha;
+  intro hb;
+  split;
+  exact ha;
+  exact hb
+}
