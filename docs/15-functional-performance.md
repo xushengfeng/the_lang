@@ -247,3 +247,63 @@ set_in_place(a,i,v) ≈ set_pure(a,i,v)
 > **函数式默认复制是安全的参考语义；我们把复制 lowering 成借用/原地，但只在 `Unique` 事实成立、且 lowering 可验证时。**  
 > Rust 的 lifetime 给了借用/别名纪律，但函数式性能的核心是**唯一性 + 区域/RC + 证明驱动的 lowering**，不是照搬 Rust 的 `'a` 语法。  
 > 危险是真实的；控制危险的方式是：源语义纯、默认复制、失败回退、关键 lowering 出证明。
+
+---
+
+## 9. 最小机器检查模型（已实现）
+
+代码：`src/ownership_proof.rs`；demo：`cargo run --bin ownership_proof_demo`。
+
+为了不把内核扩成完整堆逻辑，先用一个**两位置模型**把核心条件证出来：
+
+```text
+Loc   = Bool                 -- 两个位置
+Aid   = Bool                 -- 两个数组 id
+Heap  = Loc -> Aid
+Store = Aid -> Array
+Array = List Nat
+
+Unique h := h true != h false
+```
+
+语义：
+
+```text
+get s h l      = s (h l)
+set_pure      h s i v = arr_set (s (h true)) i v        -- 返回新数组，store 不变
+set_in_place  h s i v = update_store s (h true)
+                          (arr_set (s (h true)) i v)     -- 原地更新 store
+```
+
+检查通过的定理：
+
+```text
+set_result_same :
+  ∀ h s i v,
+    obs (set_in_place h s i v) h true = set_pure h s i v
+
+set_frame :
+  ∀ h s i v,
+    Unique h ->
+    obs (set_in_place h s i v) h false = obs s h false
+```
+
+含义：
+
+- 原地和纯版本返回同一个更新后的数组；
+- 如果两个位置不别名（`Unique h`），原地更新第一个位置对第二个观察者不可见。
+
+实际输出：
+
+```text
+✓ set_result_same    proof nodes: 33
+✓ set_frame          proof nodes: 43
+```
+
+这不是完整堆模型，但它把“唯一性 ⇒ 原地更新不改变其他观察者”变成了内核检查的定理。  
+下一步可以把它推广到：
+
+- 任意数量的位置/数组 id；
+- `Borrow`/`BorrowMut`；
+- 区域结束与 drop；
+- 真实字节码的 `set { in_place }`。

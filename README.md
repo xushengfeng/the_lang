@@ -15,6 +15,7 @@ cargo test
 cargo run --bin sum_demo
 cargo run --bin ownership_demo
 cargo run --bin vm_demo
+cargo run --bin ownership_proof_demo
 ```
 
 `sum_demo` 会输出：
@@ -116,7 +117,10 @@ cargo run --bin alethe -- examples/checks.alt
 - 两个 `sum` 实现的计算结果一致；
 - `own` / `borrow` / unique 检查：use-after-move、借用逃逸、把借用 move 进 `own` 参数都会被拒绝；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
-- 栈式 VM：`source → ownership check/lowering → bytecode → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致。
+- 栈式 VM：`source → ownership check/lowering → bytecode → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
+- 最小所有权模型（两位置堆）的内核证明：
+  - `set_result_same`：原地/纯返回同一数组；
+  - `set_frame`：`Unique h` 下原地更新第一个位置对第二个观察者不可见。
 
 **下一步**
 

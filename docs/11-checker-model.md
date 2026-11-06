@@ -437,6 +437,8 @@ NoAlias(a,b)
 
 ## 10. 下一步
 
+0. **最小模型已机器检查**：`src/ownership_proof.rs` 用两位置堆证明了
+   `set_result_same` 和 `set_frame`（`Unique h` 下原地更新对另一观察者不可见）。
 1. 把本文的规则缩成一个**核心演算**（小步语义 + 类型/所有权规则）。
 2. 选一个最小子集做 soundness 证明：
    - `own` + `borrow` + `set` 原地/复制；

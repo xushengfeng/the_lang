@@ -23,6 +23,10 @@ path = "src/bin/ownership_demo.rs"
 name = "vm_demo"
 path = "src/bin/vm_demo.rs"
 
+[[bin]]
+name = "ownership_proof_demo"
+path = "src/bin/ownership_proof_demo.rs"
+
 [profile.release]
 opt-level = 3
 lto = true

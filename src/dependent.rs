@@ -327,6 +327,43 @@ impl Env {
         );
         env.add_type("Nat.recProp", nat_rec_prop_ty)?;
 
+        // Bool and its recursor. This is a minimal data type used by the
+        // ownership model; a production kernel would use general inductives.
+        let bool_ty = sconst("Bool");
+        env.add_type("Bool", ty.clone())?;
+        env.add_type("Bool.true", bool_ty.clone())?;
+        env.add_type("Bool.false", bool_ty.clone())?;
+
+        let bool_rec_ty = spi(
+            "motive",
+            spi("_", bool_ty.clone(), ty.clone()),
+            spi(
+                "t",
+                sapp(svar("motive"), sconst("Bool.true")),
+                spi(
+                    "f",
+                    sapp(svar("motive"), sconst("Bool.false")),
+                    spi("b", bool_ty.clone(), sapp(svar("motive"), svar("b"))),
+                ),
+            ),
+        );
+        env.add_type("Bool.rec", bool_rec_ty)?;
+
+        let bool_rec_prop_ty = spi(
+            "motive",
+            spi("_", bool_ty.clone(), prop.clone()),
+            spi(
+                "t",
+                sapp(svar("motive"), sconst("Bool.true")),
+                spi(
+                    "f",
+                    sapp(svar("motive"), sconst("Bool.false")),
+                    spi("b", bool_ty.clone(), sapp(svar("motive"), svar("b"))),
+                ),
+            ),
+        );
+        env.add_type("Bool.recProp", bool_rec_prop_ty)?;
+
         // List.rec : (α : Type) -> (motive : List α -> Type) -> motive nil ->
         //            ((x : α) -> (xs : List α) -> motive xs -> motive (cons x xs)) ->
         //            (xs : List α) -> motive xs
@@ -1123,6 +1160,18 @@ impl Env {
                             if let Some(r) =
                                 self.reduce_nat_rec(name, &args[0], &args[1], &args[2], &args[3])
                             {
+                                let r = apply_many(r, &args[4..]);
+                                return self.whnf_fuel(&r, fuel - 1);
+                            }
+                        }
+                        "Bool.rec" | "Bool.recProp" if args.len() >= 4 => {
+                            let b = self.whnf_fuel(&args[3], fuel - 1);
+                            let r = match &b {
+                                Term::Const(n) if n == "Bool.true" => Some(args[1].clone()),
+                                Term::Const(n) if n == "Bool.false" => Some(args[2].clone()),
+                                _ => None,
+                            };
+                            if let Some(r) = r {
                                 let r = apply_many(r, &args[4..]);
                                 return self.whnf_fuel(&r, fuel - 1);
                             }
