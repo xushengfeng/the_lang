@@ -312,3 +312,67 @@ set_frame :
 - `Borrow`/`BorrowMut`；
 - 区域结束与 drop；
 - 真实字节码的 `set { in_place }`。
+
+---
+
+## 10. Nat 索引模型（已机器检查）
+
+`Bool2` 只是两位置的最小基例。任意位置用 `Nat` 索引，证明靠归纳，不是枚举。
+
+```text
+Loc = Nat
+Aid = Nat
+Heap  = Loc -> Aid
+Store = Aid -> Array
+Array = List Nat
+
+UniqueNat h := ∀ i j, i ≠ j -> h i ≠ h j
+```
+
+核心是 `update_at`：
+
+```text
+update_at a v s b =
+  if b = a then v else s b
+```
+
+实现用递归 + store 移位：
+
+```text
+update_at 0       v s 0       = v
+update_at 0       v s (succ b) = s (succ b)
+update_at (succ a) v s 0       = s 0
+update_at (succ a) v s (succ b) = update_at a v (shift s) b
+shift s = λ x. s (succ x)
+```
+
+证明的一般引理：
+
+```text
+update_at_same  : ∀ a v s, update_at a v s a = v
+update_at_other : ∀ a b v s, a ≠ b -> update_at a v s b = s b
+```
+
+`update_at_other` 对 `a` 做 `Nat.recProp` 归纳；`succ/succ` 情形用
+`neq_succ_succ` 和归纳假设，不是枚举所有位置。
+
+Frame：
+
+```text
+set_frame_nat :
+  ∀ h s l i v j,
+    UniqueNat h ->
+    j ≠ l ->
+    get_store (set_in_place_at h s l i v) h j
+      = get_store s h j
+```
+
+内核检查通过：
+
+```text
+✓ set_result_same_nat    proof nodes: 35
+✓ set_frame_nat          proof nodes: 65
+```
+
+这仍然是 `ProofModel`，不是 `OwnershipChecker` / `Lowering` / `BytecodeVM` 的验证。  
+但它已经把“任意位置 + 唯一性 ⇒ 原地更新对其它位置不可见”证成了内核定理。

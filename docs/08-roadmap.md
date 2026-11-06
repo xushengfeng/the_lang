@@ -70,7 +70,8 @@
 - [x] 最小原地精化证明（两位置堆模型，`src/ownership_proof.rs`）：
   - `set_result_same`：原地/纯返回同一数组；
   - `set_frame`：`Unique h` 下更新第一个位置对第二个观察者不可见；
-- [ ] 推广到任意位置/数组 id、`borrow_mut`、区域/drop；
+- [x] 推广到任意位置/数组 id（`Nat` 索引，归纳证明 `update_at_other`）；
+- [ ] `borrow_mut`、区域/drop；
 - [ ] 真实 lowering 的等价证明/翻译验证。
 
 验收：

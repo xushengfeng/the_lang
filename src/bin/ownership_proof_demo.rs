@@ -1,49 +1,24 @@
-//! Minimal machine-checked model: unique ownership and in-place update.
+//! Machine-checked ownership models.
 //!
-//! Model:
-//!   two locations (Bool.true / Bool.false)
-//!   heap  : location -> aid
-//!   store : aid -> Array
-//!   Unique h := h true != h false
-//!   set_pure      returns the updated array, leaves the store unchanged
-//!   set_in_place  updates the store at the first location
+//! Two models:
+//!   Bool2 : two locations, two array ids (minimal case split)
+//!   Nat   : arbitrary locations/ids, frame proved by induction
 //!
-//! Checked:
-//!   set_result_same : both versions return the same array
-//!   set_frame       : under Unique h, the second location is unchanged
+//! Both are checked by `proofcheck` (the kernel).  No runtime verification.
 
 use alethe::dependent::term_size;
-use alethe::ownership_proof::build;
+use alethe::ownership_proof::build_nat;
 
-fn main() {
-    let env = match build() {
-        Ok(env) => env,
-        Err(e) => {
-            eprintln!("model construction failed:\n{e}");
-            std::process::exit(1);
-        }
-    };
-
-    println!("minimal ownership model (two locations)");
-    println!("========================================");
-    println!("heap  : Bool -> Bool       -- location -> array id");
-    println!("store : Bool -> List Nat   -- array id -> array");
-    println!("Unique h := h true != h false\n");
-
-    for name in ["Unique", "set_pure", "set_in_place"] {
-        if let Some(ty) = env.type_of(name) {
-            println!("{name} : {}", env.pretty(ty));
-        }
-    }
-
-    println!("\nchecked theorems");
-    for name in ["set_result_same", "set_frame"] {
+fn show(env: &alethe::dependent::Env, title: &str, names: &[&str]) {
+    println!("\n{title}");
+    println!("{}", "=".repeat(title.len()));
+    for name in names {
         match env.check_named(name) {
             Ok(()) => {
                 let ty = env.type_of(name).map(|t| env.pretty(t)).unwrap_or_default();
                 println!("  ✓ {name}");
                 println!("    {ty}");
-                if let Some(d) = env.defs.get(name) {
+                if let Some(d) = env.defs.get(*name) {
                     println!("    proof nodes: {}", term_size(&d.body));
                 }
             }
@@ -53,9 +28,40 @@ fn main() {
             }
         }
     }
+}
+
+fn main() {
+    let env = match build_nat() {
+        Ok(env) => env,
+        Err(e) => {
+            eprintln!("model construction failed:\n{e}");
+            std::process::exit(1);
+        }
+    };
+
+    println!("ownership ProofModel (checked by proofcheck)");
+    println!("============================================");
+    println!("Bool2: Loc = Bool, Aid = Bool, Heap = Loc -> Aid");
+    println!("Nat  : Loc = Nat,  Aid = Nat,  Heap = Loc -> Aid");
+    println!("Store s : Aid -> Array;  get s h l = s (h l)");
+    println!("Unique h := ∀ i j, i ≠ j -> h i ≠ h j");
+    println!("set_pure returns the updated array; set_in_place updates the store.");
+
+    show(
+        &env,
+        "Bool2 model (two locations)",
+        &["set_result_same", "set_frame"],
+    );
+
+    show(
+        &env,
+        "Nat model (arbitrary locations, induction)",
+        &["set_result_same_nat", "set_frame_nat"],
+    );
 
     println!("\nmeaning");
-    println!("  set_result_same: in-place and pure return the same updated array.");
-    println!("  set_frame:       if the two locations do not alias, updating the");
-    println!("                   first is invisible to the second.");
+    println!("  set_*_same: in-place and pure return the same updated array.");
+    println!("  set_*_frame: under Unique, updating one location is invisible");
+    println!("               to every other location.");
+    println!("\nchecked at proof/compile time; the VM does not verify at runtime.");
 }
