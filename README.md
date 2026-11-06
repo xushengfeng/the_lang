@@ -74,15 +74,19 @@ cargo run --bin alethe -- examples/checks.alt
 11. [检查器模型：所有权/借用/区域/效果](docs/11-checker-model.md)
 12. [VM 模型：字节码/堆/语义/验证](docs/12-vm-model.md)
 13. [Lowering 与精化模型](docs/13-lowering-model.md)
-14. [决策记录与开放问题](docs/09-decisions.md)
+14. [组件命名与职责](docs/14-roles.md)
+15. [函数式默认复制、性能与原地修改](docs/15-functional-performance.md)
+16. [决策记录与开放问题](docs/09-decisions.md)
 
 ## 模型优先
 
-当前 Rust 代码是**参考原型**，不是规格。`docs/11`–`docs/13` 是目标模型：
+当前 Rust 代码是**参考原型**，不是规格。`docs/11`–`docs/15` 是目标模型：
 
 - `11-checker-model.md`：`own`/`borrow`/`borrow_mut`/`share`、区域、效果、唯一性、原地规则、soundness 义务；
 - `12-vm-model.md`：字节码语法、栈类型、堆/帧、小步语义、字节码验证、编译正确性；
-- `13-lowering-model.md`：IR 分层、证明擦除、原地/复制 lowering、精化/翻译验证。
+- `13-lowering-model.md`：IR 分层、证明擦除、原地/复制 lowering、精化/翻译验证；
+- `14-roles.md`：组件命名（`typecheck`/`owncheck`/`borrowck`/`regioninfer`/`effectcheck`/`refinecheck`/`proofcheck`/`ownlower`）；
+- `15-functional-performance.md`：函数式复制语义、Rust 生命周期能借什么、原地修改的安全条件。
 
 模型稳定前，Rust 实现先冻结；后续只在模型确定后回填代码。
 
