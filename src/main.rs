@@ -30,6 +30,16 @@ fn main() {
                             f.body
                         )
                     }
+                    syntax::Decl::Spec(s) => {
+                        println!("spec fn {}({} params) -> {}", s.name, s.params.len(), s.ret)
+                    }
+                    syntax::Decl::Impl(i) => println!(
+                        "impl fn {}({} params) -> {} refines {}",
+                        i.f.name,
+                        i.f.params.len(),
+                        i.f.ret,
+                        i.refines
+                    ),
                     syntax::Decl::Theorem(t) => {
                         println!("theorem {}: {} tactic(s)", t.name, t.tactics.len())
                     }

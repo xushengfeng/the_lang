@@ -16,6 +16,7 @@ cargo run --bin sum_demo
 cargo run --bin ownership_demo
 cargo run --bin vm_demo
 cargo run --bin ownership_proof_demo
+cargo run --bin refines_demo
 ```
 
 `sum_demo` 会输出：
@@ -128,6 +129,12 @@ cargo run --bin alethe -- examples/checks.alt
 - 任意 `Nat` 位置模型的内核证明（归纳，不是枚举）：
   - `set_result_same_nat`；
   - `set_frame_nat`：`UniqueNat h` 下原地更新对任意其它位置不可见；
+- `spec` / `impl ... refines` 原型（`src/refines.rs`）：
+  - 签名/模式兼容；
+  - `requires Unique(a)` 需要 `own`；
+  - body 重化为 spec 表达式并与 `ensures` 比较；
+  - `fill` / `fill_shared` 通过，`fill_bad` 被拒绝；
+  - 编译 → 字节码验证 → VM；
 - Borrow 权限模型的内核证明：
   - `borrow_not_mut`：共享/可变借用互斥；
   - `borrow_cannot_write`：共享借用只读；

@@ -263,3 +263,37 @@ impl fn sum_fast(xs: List<Int>) -> Int refines sum { ... }
 | benchmark 过拟合 | 选到“考试型”实现 | held-out + 统计 + 多 workload |
 | 编译时间 | 依赖类型 + SMT + 搜索 | 增量/缓存/并行 |
 | 安全 | AI 生成恶意代码 | 能力类型/沙箱/provenance |
+
+---
+
+## 10. `refines` 原型（已实现）
+
+当前最小闭环：
+
+```bash
+cargo run --bin refines_demo
+```
+
+```text
+refines reports:
+  ✓ fill refines fill_spec
+  ✓ fill_shared refines fill_shared_spec
+  ✗ fill_bad refines fill_spec: body reifies to `set_pure(a, 0, 0)`, spec requires `set_pure(a, 0, x)`
+bytecode verification passed
+main = 7
+```
+
+它检查：
+
+- 签名兼容（参数名/类型/模式/返回类型）；
+- `requires Unique(a)` 需要 `own` 参数；
+- body 重化为 spec 表达式，与 `ensures` 比较。
+
+它**不是**内核证明：
+
+- 只是语法/表达式级等价；
+- 不支持 `if`/`seq`/复杂前置条件；
+- 还没有把 `refines` 义务交给 ProofModel/proofcheck；
+- 失败的 impl 仍然会被编译，生产构建应该拒绝或跳过。
+
+下一步：把 `refines` 义务接到 `ProofModel`（例如 `set_frame_nat`），让它从“语法级检查”升级为“内核检查”。

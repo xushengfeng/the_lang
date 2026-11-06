@@ -1,0 +1,36 @@
+// Minimal spec / impl / refines example.
+
+spec fn fill_spec(own a: Array<Int>, x: Int) -> Array<Int>
+  requires Unique(a)
+  ensures set_pure(a, 0, x)
+
+impl fn fill(own a: Array<Int>, x: Int) -> Array<Int>
+  refines fill_spec
+{
+  set(a, 0, x)
+}
+
+spec fn fill_shared_spec(a: Array<Int>, x: Int) -> Array<Int>
+  ensures set_pure(a, 0, x)
+
+impl fn fill_shared(a: Array<Int>, x: Int) -> Array<Int>
+  refines fill_shared_spec
+{
+  set(a, 0, x)
+}
+
+// Expected to fail: body returns set_pure(a, 0, 0), not set_pure(a, 0, x).
+impl fn fill_bad(own a: Array<Int>, x: Int) -> Array<Int>
+  refines fill_spec
+{
+  set(a, 0, 0)
+}
+
+fn main() -> Int {
+  let a = [1, 2, 3];
+  let b = fill(a, 9);
+  let c = fill_shared(b, 7);
+  print(b);
+  print(c);
+  c[0]
+}

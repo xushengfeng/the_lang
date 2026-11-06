@@ -12,6 +12,9 @@ pub enum Tok {
     Int(i64),
 
     Fn,
+    Spec,
+    Impl,
+    Refines,
     Let,
     In,
     If,
@@ -115,7 +118,24 @@ pub struct Program {
 #[derive(Clone, Debug)]
 pub enum Decl {
     Fn(FnDecl),
+    Spec(SpecDecl),
+    Impl(ImplDecl),
     Theorem(ThmDecl),
+}
+
+#[derive(Clone, Debug)]
+pub struct SpecDecl {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub ret: Ty,
+    pub requires: Vec<PExpr>,
+    pub ensures: Vec<PExpr>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ImplDecl {
+    pub f: FnDecl,
+    pub refines: String,
 }
 
 #[derive(Clone, Debug)]
@@ -247,6 +267,7 @@ pub enum PExpr {
     Imp(Box<PExpr>, Box<PExpr>),
     Forall(String, SortAst, Box<PExpr>),
     Exists(String, SortAst, Box<PExpr>),
+    Call(String, Vec<PExpr>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -346,6 +367,9 @@ pub fn lex(src: &str) -> Result<Vec<Token>, ParseError> {
             let s: String = chars[start..i].iter().collect();
             let tok = match s.as_str() {
                 "fn" => Tok::Fn,
+                "spec" => Tok::Spec,
+                "impl" => Tok::Impl,
+                "refines" => Tok::Refines,
                 "let" => Tok::Let,
                 "in" => Tok::In,
                 "if" => Tok::If,
@@ -501,6 +525,8 @@ impl Parser {
             match self.peek() {
                 Tok::Eof => break,
                 Tok::Fn => decls.push(Decl::Fn(self.parse_fn()?)),
+                Tok::Spec => decls.push(Decl::Spec(self.parse_spec()?)),
+                Tok::Impl => decls.push(Decl::Impl(self.parse_impl()?)),
                 Tok::Theorem => decls.push(Decl::Theorem(self.parse_theorem()?)),
                 other => return self.err(format!("expected declaration, found {:?}", other)),
             }
@@ -511,18 +537,7 @@ impl Parser {
     fn parse_fn(&mut self) -> Result<FnDecl, ParseError> {
         self.expect(Tok::Fn)?;
         let name = self.ident()?;
-        self.expect(Tok::LParen)?;
-        let mut params = Vec::new();
-        if !self.eat(&Tok::RParen) {
-            loop {
-                params.push(self.parse_param()?);
-                if self.eat(&Tok::Comma) {
-                    continue;
-                }
-                self.expect(Tok::RParen)?;
-                break;
-            }
-        }
+        let params = self.parse_params()?;
         self.expect(Tok::Arrow)?;
         let ret = self.parse_type()?;
 
@@ -551,6 +566,84 @@ impl Parser {
             requires,
             ensures,
             body,
+        })
+    }
+
+    fn parse_params(&mut self) -> Result<Vec<Param>, ParseError> {
+        self.expect(Tok::LParen)?;
+        let mut params = Vec::new();
+        if !self.eat(&Tok::RParen) {
+            loop {
+                params.push(self.parse_param()?);
+                if self.eat(&Tok::Comma) {
+                    continue;
+                }
+                self.expect(Tok::RParen)?;
+                break;
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_spec(&mut self) -> Result<SpecDecl, ParseError> {
+        self.expect(Tok::Spec)?;
+        self.expect(Tok::Fn)?;
+        let name = self.ident()?;
+        let params = self.parse_params()?;
+        self.expect(Tok::Arrow)?;
+        let ret = self.parse_type()?;
+        let mut requires = Vec::new();
+        while self.eat(&Tok::Requires) {
+            requires.push(self.parse_pexpr()?);
+        }
+        let mut ensures = Vec::new();
+        while self.eat(&Tok::Ensures) {
+            ensures.push(self.parse_pexpr()?);
+        }
+        Ok(SpecDecl {
+            name,
+            params,
+            ret,
+            requires,
+            ensures,
+        })
+    }
+
+    fn parse_impl(&mut self) -> Result<ImplDecl, ParseError> {
+        self.expect(Tok::Impl)?;
+        self.expect(Tok::Fn)?;
+        let name = self.ident()?;
+        let params = self.parse_params()?;
+        self.expect(Tok::Arrow)?;
+        let ret = self.parse_type()?;
+        let mut requires = Vec::new();
+        while self.eat(&Tok::Requires) {
+            requires.push(self.parse_pexpr()?);
+        }
+        let mut ensures = Vec::new();
+        while self.eat(&Tok::Ensures) {
+            ensures.push(self.parse_pexpr()?);
+        }
+        self.expect(Tok::Refines)?;
+        let refines = self.ident()?;
+        let body = if self.eat(&Tok::LBrace) {
+            let body = self.parse_expr_seq()?;
+            self.expect(Tok::RBrace)?;
+            body
+        } else {
+            self.expect(Tok::Eq)?;
+            self.parse_expr()?
+        };
+        Ok(ImplDecl {
+            f: FnDecl {
+                name,
+                params,
+                ret,
+                requires,
+                ensures,
+                body,
+            },
+            refines,
         })
     }
 
@@ -968,6 +1061,19 @@ impl Parser {
                     let inner = self.parse_p_imp()?;
                     self.expect(Tok::RParen)?;
                     Ok(PExpr::Len(Box::new(inner)))
+                } else if self.eat(&Tok::LParen) {
+                    let mut args = Vec::new();
+                    if !self.eat(&Tok::RParen) {
+                        loop {
+                            args.push(self.parse_p_imp()?);
+                            if self.eat(&Tok::Comma) {
+                                continue;
+                            }
+                            self.expect(Tok::RParen)?;
+                            break;
+                        }
+                    }
+                    Ok(PExpr::Call(name, args))
                 } else {
                     Ok(PExpr::Var(name))
                 }

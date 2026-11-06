@@ -58,14 +58,18 @@ impl CheckedProgram {
 pub fn check_program(prog: &Program) -> Result<CheckedProgram, String> {
     let mut checker = Checker::new();
     for d in &prog.decls {
-        if let Decl::Fn(f) = d {
-            checker.collect(f)?;
+        match d {
+            Decl::Fn(f) => checker.collect(f)?,
+            Decl::Impl(i) => checker.collect(&i.f)?,
+            Decl::Spec(_) | Decl::Theorem(_) => {}
         }
     }
     let mut funcs = Vec::new();
     for d in &prog.decls {
-        if let Decl::Fn(f) = d {
-            funcs.push(checker.check_fn(f)?);
+        match d {
+            Decl::Fn(f) => funcs.push(checker.check_fn(f)?),
+            Decl::Impl(i) => funcs.push(checker.check_fn(&i.f)?),
+            Decl::Spec(_) | Decl::Theorem(_) => {}
         }
     }
     Ok(CheckedProgram { funcs })

@@ -43,11 +43,16 @@
 
 ## M2：spec / impl / refines + 多实现
 
-- `spec fn` / `impl fn` / `refines`；
-- 精化义务生成与检查；
-- reference + optimized 多实现；
-- benchmark harness；
-- provenance 记录。
+**部分完成**（`src/refines.rs`）：
+
+- [x] `spec fn` / `impl fn ... refines ...` 语法；
+- [x] 签名兼容（参数名/类型/模式/返回类型）；
+- [x] 前置事实检查（`requires Unique(a)` 需要 `own`）；
+- [x] 规格表达式等价（body 重化为 spec 表达式）；
+- [x] demo：`fill` / `fill_shared` 通过，`fill_bad` 被拒绝；
+- [ ] 内核级证明义务（把 `refines` 接到 ProofModel）；
+- [ ] reference + optimized 多实现 + benchmark 选择；
+- [ ] provenance 记录。
 
 验收：
 
