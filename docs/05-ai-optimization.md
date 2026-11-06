@@ -289,11 +289,27 @@ main = 7
 - `requires Unique(a)` 需要 `own` 参数；
 - body 重化为 spec 表达式，与 `ensures` 比较。
 
-它**不是**内核证明：
+现在通过 `refines` 还要求一个 **kernel certificate**：
 
-- 只是语法/表达式级等价；
-- 不支持 `if`/`seq`/复杂前置条件；
-- 还没有把 `refines` 义务交给 ProofModel/proofcheck；
-- 失败的 impl 仍然会被编译，生产构建应该拒绝或跳过。
+```text
+fill        / fill_spec        -> fill_refines_spec
+fill_shared / fill_shared_spec -> fill_shared_refines_spec
+```
 
-下一步：把 `refines` 义务接到 `ProofModel`（例如 `set_frame_nat`），让它从“语法级检查”升级为“内核检查”。
+```text
+✓ fill refines fill_spec  (kernel: fill_refines_spec)
+✓ fill_shared refines fill_shared_spec  (kernel: fill_shared_refines_spec)
+```
+
+`fill_refines_spec` 由 `set_result_same_nat` 检查；`fill_shared_refines_spec` 是 copy/pure 的 `rfl`。
+
+仍然不是自动的端到端证明：
+
+- certificate 映射是手动的；
+- 定理语句是手写的；
+- 还没有从 surface spec 自动生成 kernel obligation；
+- `Unique(a)` 和 `UniqueNat h`/location 的对应仍是建模约定；
+- 不支持的 `if`/`seq`/复杂前置条件；
+- 失败的 impl 仍然会被编译，生产构建应拒绝或跳过。
+
+下一步：从 surface spec 自动生成 obligation，并把 `Unique(a)` 翻译成 `UniqueNat h`/具体的 `h l`。

@@ -50,7 +50,8 @@
 - [x] 前置事实检查（`requires Unique(a)` 需要 `own`）；
 - [x] 规格表达式等价（body 重化为 spec 表达式）；
 - [x] demo：`fill` / `fill_shared` 通过，`fill_bad` 被拒绝；
-- [ ] 内核级证明义务（把 `refines` 接到 ProofModel）；
+- [x] kernel certificate：`fill_refines_spec` / `fill_shared_refines_spec`（手动映射，`proofcheck` 检查）；
+- [ ] 从 surface spec 自动生成 kernel obligation；
 - [ ] reference + optimized 多实现 + benchmark 选择；
 - [ ] provenance 记录。
 

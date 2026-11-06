@@ -133,7 +133,10 @@ cargo run --bin alethe -- examples/checks.alt
   - 签名/模式兼容；
   - `requires Unique(a)` 需要 `own`；
   - body 重化为 spec 表达式并与 `ensures` 比较；
-  - `fill` / `fill_shared` 通过，`fill_bad` 被拒绝；
+  - 通过后还要求 kernel certificate（`src/refines_proof.rs`）：
+    - `fill` → `fill_refines_spec`（由 `set_result_same_nat` 检查）；
+    - `fill_shared` → `fill_shared_refines_spec`；
+  - `fill_bad` 被拒绝；
   - 编译 → 字节码验证 → VM；
 - Borrow 权限模型的内核证明：
   - `borrow_not_mut`：共享/可变借用互斥；

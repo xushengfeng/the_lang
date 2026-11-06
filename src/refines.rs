@@ -12,6 +12,7 @@
 
 use std::collections::HashMap;
 
+use crate::refines_proof::ProofStore;
 use crate::syntax::{
     BinOp, CallArg, Decl, Expr, FnDecl, ImplDecl, Mode, PExpr, ParamKind, Program, SpecDecl, UnOp,
 };
@@ -53,6 +54,7 @@ pub struct RefinesReport {
     pub spec_name: String,
     pub ok: bool,
     pub message: String,
+    pub kernel_proof: Option<String>,
 }
 
 fn subst(e: &SpecExpr, name: &str, repl: &SpecExpr) -> SpecExpr {
@@ -284,7 +286,10 @@ fn check_ensures(spec: &SpecDecl, imp: &ImplDecl) -> Result<(), String> {
     }
 }
 
-pub fn check_program(prog: &Program) -> Result<Vec<RefinesReport>, String> {
+pub fn check_program(
+    prog: &Program,
+    proofs: Option<&ProofStore>,
+) -> Result<Vec<RefinesReport>, String> {
     let mut specs: HashMap<String, &SpecDecl> = HashMap::new();
     for d in &prog.decls {
         if let Decl::Spec(s) = d {
@@ -303,9 +308,24 @@ pub fn check_program(prog: &Program) -> Result<Vec<RefinesReport>, String> {
                 imp.f.name, imp.refines
             ));
         };
+
+        let mut kernel_proof = None;
         let result = check_signature(spec, imp)
             .and_then(|_| check_requires(spec, imp))
-            .and_then(|_| check_ensures(spec, imp));
+            .and_then(|_| check_ensures(spec, imp))
+            .and_then(|_| {
+                if let Some(store) = proofs {
+                    let cert = certificate_for(&imp.f.name, &spec.name).ok_or_else(|| {
+                        format!(
+                            "no kernel certificate mapping for `{}` refines `{}`",
+                            imp.f.name, spec.name
+                        )
+                    })?;
+                    store.check(cert)?;
+                    kernel_proof = Some(cert.to_string());
+                }
+                Ok(())
+            });
         let (ok, message) = match result {
             Ok(()) => (true, "ok".to_string()),
             Err(e) => (false, e),
@@ -315,9 +335,20 @@ pub fn check_program(prog: &Program) -> Result<Vec<RefinesReport>, String> {
             spec_name: spec.name.clone(),
             ok,
             message,
+            kernel_proof,
         });
     }
     Ok(reports)
+}
+
+/// Manual certificate mapping for the prototype.  The next step is to
+/// generate this obligation from the surface spec.
+fn certificate_for(impl_name: &str, spec_name: &str) -> Option<&'static str> {
+    match (impl_name, spec_name) {
+        ("fill", "fill_spec") => Some("fill_refines_spec"),
+        ("fill_shared", "fill_shared_spec") => Some("fill_shared_refines_spec"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -357,10 +388,28 @@ mod tests {
     fn refines_accepts_and_rejects() {
         let prog = parse(SRC).unwrap();
         check_source(SRC).unwrap();
-        let reports = check_program(&prog).unwrap();
+        let reports = check_program(&prog, None).unwrap();
         let get = |n: &str| reports.iter().find(|r| r.impl_name == n).unwrap();
         assert!(get("fill").ok);
         assert!(get("fill_shared").ok);
+        assert!(!get("fill_bad").ok);
+    }
+
+    #[test]
+    fn refines_with_kernel_certificates() {
+        let prog = parse(SRC).unwrap();
+        let store = ProofStore::build().unwrap();
+        let reports = check_program(&prog, Some(&store)).unwrap();
+        let get = |n: &str| reports.iter().find(|r| r.impl_name == n).unwrap();
+        let fill = get("fill");
+        assert!(fill.ok);
+        assert_eq!(fill.kernel_proof.as_deref(), Some("fill_refines_spec"));
+        let shared = get("fill_shared");
+        assert!(shared.ok);
+        assert_eq!(
+            shared.kernel_proof.as_deref(),
+            Some("fill_shared_refines_spec")
+        );
         assert!(!get("fill_bad").ok);
     }
 
@@ -375,7 +424,7 @@ mod tests {
             { set(a, 0, 1) }
         "#;
         let prog = parse(src).unwrap();
-        let reports = check_program(&prog).unwrap();
+        let reports = check_program(&prog, None).unwrap();
         assert!(!reports[0].ok);
         assert!(reports[0].message.contains("not `own`"));
     }

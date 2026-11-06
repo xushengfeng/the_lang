@@ -7,6 +7,7 @@ use std::fs;
 
 use alethe::ownership::check_source;
 use alethe::refines::check_program as check_refines;
+use alethe::refines_proof::ProofStore;
 use alethe::syntax::parse;
 use alethe::vm::{compile, run, verify};
 
@@ -36,7 +37,14 @@ fn main() {
         }
     };
 
-    let reports = match check_refines(&prog) {
+    let proofs = match ProofStore::build() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("proof store failed:\n{e}");
+            std::process::exit(1);
+        }
+    };
+    let reports = match check_refines(&prog, Some(&proofs)) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("refines check failed:\n{e}");
@@ -46,7 +54,13 @@ fn main() {
     println!("refines reports:");
     for r in &reports {
         if r.ok {
-            println!("  ✓ {} refines {}", r.impl_name, r.spec_name);
+            match &r.kernel_proof {
+                Some(p) => println!(
+                    "  ✓ {} refines {}  (kernel: {})",
+                    r.impl_name, r.spec_name, p
+                ),
+                None => println!("  ✓ {} refines {}", r.impl_name, r.spec_name),
+            }
         } else {
             println!("  ✗ {} refines {}: {}", r.impl_name, r.spec_name, r.message);
         }

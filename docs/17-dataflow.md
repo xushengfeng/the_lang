@@ -264,7 +264,8 @@ AI 可以在 spec 层和中端提候选；验证器和 benchmark 过滤。
 - 字节码/VM：`src/vm.rs`
 - proofcheck：`src/dependent.rs`
 - ProofModel：`src/ownership_proof.rs`
-- 没有 `refines`、没有 IR、没有真正的中端优化。
+- `refines` 原型：`src/refines.rs` + `src/refines_proof.rs`（kernel certificate）
+- 没有 IR、没有真正的中端优化。
 
 **目标：**
 
