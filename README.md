@@ -56,13 +56,22 @@ cargo run --bin alethe -- examples/checks.alt
 | `src/dependent.rs` | 内核模块入口：re-export `term`/`env` |
 | `src/dependent/term.rs` | `Term`/`STerm`/构造器/elaboration |
 | `src/dependent/debruijn.rs` | shift/subst/instantiate |
-| `src/dependent/env.rs` | 内核环境、内置类型与定义构造 |
+| `src/dependent/env.rs` | `Env`、`add_type`/`add_def`、demo helpers |
+| `src/dependent/builtins.rs` | `Env::new` 与内置定义构造 |
 | `src/dependent/check.rs` | 类型检查、归约、定义等价、pretty |
 | `src/bin/sum_demo.rs` | 内核 demo：`sum_ref` / `sum_fast` / `sum_fast_eq` |
 | `src/ownership.rs` | 所有权模块入口：re-export `types`/`checker`/`interp` |
 | `src/ownership/types.rs` | `ParamSig`、`FnSig`、`CheckedFn`、`CheckedProgram` |
 | `src/ownership/checker.rs` | `own`/`borrow`/unique 检查与 `set`/`push` lowering |
+| `src/ownership/context.rs` | `Ctx`/`VarInfo` 检查器上下文 |
+| `src/ownership/rules.rs` | move/borrow/in-place 规则 helper |
+| `src/ownership/uses.rs` | 使用计数、借用逃逸分析 |
 | `src/ownership/interp.rs` | 旧树遍历解释器 |
+| `src/refines.rs` | `spec`/`impl`/`refines` 模块入口：re-export `types`/`check` |
+| `src/refines/types.rs` | `SpecExpr`、`RefinesReport` |
+| `src/refines/reify.rs` | spec/impl 表达式重化 |
+| `src/refines/check.rs` | 签名/前置/ensures/证书检查 |
+| `src/refines_proof.rs` | refines 的内核证书映射 |
 | `src/ownership_proof.rs` | 所有权模型证明入口：re-export `two_pos`/`nat`/`borrow` |
 | `src/ownership_proof/two_pos.rs` | 两位置堆的 frame/result 证明 |
 | `src/ownership_proof/nat.rs` | Nat 索引位置的归纳证明 |
@@ -172,7 +181,7 @@ cargo run --bin alethe -- examples/checks.alt
 - MemIR 静态验证器：scope、类型、调用 arity、if 分支类型；`run_program_in` 执行前验证；
 - 工程收口：`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --all-targets` 和 demo smoke 已进 CI；
 - `src/mem_plan` 拆成 `ir`/`planner`/`eval`/`bridge`/`validate`，并有 `tests/` 集成测试；
-- 核心模块拆分：`region`（heap/types）、`vm`（ir/compile/verify/run）、`syntax`（ast/lexer/parser/pretty）、`ownership`（types/checker/interp）、`dependent`（term/debruijn/env/check）、`ownership_proof`（common/two_pos/nat/borrow）；
+- 核心模块拆分：`region`（heap/types）、`vm`（ir/compile/verify/run）、`syntax`（ast/lexer/parser/pretty）、`ownership`（types/checker/context/rules/uses/interp）、`dependent`（term/debruijn/env/builtins/check）、`ownership_proof`（common/two_pos/nat/borrow）、`refines`（types/reify/check）；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
 - 栈式 VM：`source → ownership check/lowering → bytecode → verify → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
 - 字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组操作；错误字节码被拒绝；

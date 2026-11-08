@@ -11,6 +11,7 @@
 //! `Nat.recProp` and `List.recProp` are Prop-motive variants of the recursors.
 //! They keep the prototype small without universe polymorphism.
 
+mod builtins;
 mod check;
 mod debruijn;
 mod env;

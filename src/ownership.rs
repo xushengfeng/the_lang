@@ -9,8 +9,11 @@
 //! proof kernel.
 
 mod checker;
+mod context;
 mod interp;
+mod rules;
 mod types;
+mod uses;
 
 pub use checker::*;
 pub use interp::*;
