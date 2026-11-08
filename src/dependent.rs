@@ -1511,8 +1511,8 @@ mod tests {
     fn both_sums_compute_the_same() {
         let env = Env::new().unwrap();
         let list = env.list_of(&[1, 2, 3, 4, 5]);
-        let a = env.apply("sum_ref", &[list.clone()]);
-        let b = env.apply("sum_fast", &[list.clone()]);
+        let a = env.apply("sum_ref", std::slice::from_ref(&list));
+        let b = env.apply("sum_fast", std::slice::from_ref(&list));
         assert_eq!(env.eval_nat(&a), Some(15));
         assert_eq!(env.eval_nat(&b), Some(15));
     }

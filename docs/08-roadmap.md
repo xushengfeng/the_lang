@@ -143,7 +143,7 @@
 
 - 栈式 VM → Cranelift/LLVM；
 - 单态化、unboxed ADT、尾调用；
-- 区域/RC 运行时；
+- 区域运行时；RC/GC 作为备选；
 - benchmark 套件；
 - 与 C/Rust 对比。
 

@@ -61,7 +61,12 @@ cargo run --bin alethe -- examples/checks.alt
 | `src/bin/vm_demo.rs` | VM demo CLI |
 | `src/region.rs` | 区域堆模型：分配、原地/复制更新、区域释放、观察等价 |
 | `src/bin/region_demo.rs` | 区域内存 demo CLI |
-| `src/mem_plan.rs` | 最小内存规划器 + MemIR：move/downgrade/copy、原地/复制选择、逃逸拒绝、checked surface 桥、普通函数调用与每调用区域 |
+| `src/mem_plan.rs` | MemIR 模块入口：re-export `ir`/`planner`/`eval`/`bridge`/`validate` |
+| `src/mem_plan/ir.rs` | `SrcExpr`、`MemExpr`、`MemFn`、`MemProgram` |
+| `src/mem_plan/planner.rs` | move/downgrade/copy、原地/复制选择 |
+| `src/mem_plan/eval.rs` | MemIR 求值、区域、闭包/thunk |
+| `src/mem_plan/bridge.rs` | checked surface → MemIR、运行入口 |
+| `src/mem_plan/validate.rs` | MemIR scope/type/arity 验证 |
 | `src/bin/mem_plan_demo.rs` | 内存规划 demo CLI |
 | `src/bin/surface_mem_demo.rs` | checked surface 函数到区域堆的 demo CLI |
 | `examples/ownership.alt` | 所有权/VM 示例 |
@@ -89,7 +94,8 @@ cargo run --bin alethe -- examples/checks.alt
 16. [编译器、检查器、VM 到底是什么](docs/16-compiler-architecture.md)
 17. [业务代码、类型证明、优化：文件与数据流](docs/17-dataflow.md)
 18. [区域内存模型（无 RC/GC）](docs/18-region-memory.md)
-19. [决策记录与开放问题](docs/09-decisions.md)
+19. [架构与信任边界](docs/19-architecture.md)
+20. [决策记录与开放问题](docs/09-decisions.md)
 
 ## 模型优先
 
@@ -100,7 +106,8 @@ cargo run --bin alethe -- examples/checks.alt
 - `13-lowering-model.md`：IR 分层、证明擦除、原地/复制 lowering、精化/翻译验证；
 - `14-roles.md`：组件命名（`typecheck`/`owncheck`/`borrowck`/`regioninfer`/`effectcheck`/`refinecheck`/`proofcheck`/`ownlower`）；
 - `15-functional-performance.md`：函数式复制语义、Rust 生命周期能借什么、原地修改的安全条件；
-- `18-region-memory.md`：无 RC/GC 的区域堆、分配/释放规则、原地/复制与证明义务；`src/region.rs`/`src/mem_plan.rs` 是可执行种子。
+- `18-region-memory.md`：无 RC/GC 的区域堆、分配/释放规则、原地/复制与证明义务；`src/region.rs`/`src/mem_plan.rs` 是可执行种子；
+- `19-architecture.md`：canonical pipeline、MemIR/ReprIR/VM 边界、信任基与模块职责。
 
 模型稳定前，Rust 代码只做最小参考实现和可执行模型种子，不追求完整功能。
 
@@ -128,7 +135,7 @@ cargo run --bin alethe -- examples/checks.alt
 
 **已跑通**
 
-- 66 个单元测试通过；
+- 74 个单元测试 + 8 个集成测试通过；
 - 依赖类型内核的类型检查与定义等价；
 - `Nat.rec` / `List.rec` / `Eq.subst` 的归约；
 - `add_assoc`、`add_zero`、`go_eq`、`sum_fast_eq` 的证明检查；
@@ -141,6 +148,9 @@ cargo run --bin alethe -- examples/checks.alt
 - 普通函数调用：`plan_checked_program` + `run_program`；每次调用一个区域，标量返回释放，被调用者新建的数组返回值复制到调用者区域；`fill(a, 9)` 原地、`make(7)` 返回复制已跑通；
 - 直接 `if`：降成 primitive branch，只执行选中分支，不构造分支闭包；`optimized=false` 时构造两个分支 thunk 并只强制选中一个，`MemStats.thunks` 计数；
 - MemIR 一等函数/闭包：`Lambda`/`Apply`/`Thunk`/`Force`；闭包捕获环境，thunk 是零参延迟值；`MemStats.closures` 计数；
+- MemIR 静态验证器：scope、类型、调用 arity、if 分支类型；`run_program_in` 执行前验证；
+- 工程收口：`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --all-targets` 和 demo smoke 已进 CI；
+- `src/mem_plan` 拆成 `ir`/`planner`/`eval`/`bridge`/`validate`，并有 `tests/` 集成测试；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
 - 栈式 VM：`source → ownership check/lowering → bytecode → verify → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
 - 字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组操作；错误字节码被拒绝；

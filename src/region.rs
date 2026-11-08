@@ -129,7 +129,7 @@ impl RegionHeap {
     }
 
     pub fn is_live(&self, region: RegionId) -> bool {
-        self.regions.get(&region).map_or(false, |r| r.live)
+        self.regions.get(&region).is_some_and(|r| r.live)
     }
 
     fn live_region(&self, region: RegionId) -> Result<&Region, MemError> {

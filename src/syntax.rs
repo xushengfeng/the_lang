@@ -943,9 +943,7 @@ impl Parser {
                 let name = self.ident()?;
                 self.expect(Tok::Eq)?;
                 let value = self.parse_expr()?;
-                let body = if self.eat(&Tok::In) {
-                    self.parse_expr_seq()?
-                } else if self.eat(&Tok::Semi) {
+                let body = if self.eat(&Tok::In) || self.eat(&Tok::Semi) {
                     self.parse_expr_seq()?
                 } else {
                     return self.err("expected `in` or `;` after let binding");

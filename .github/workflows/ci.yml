@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-targets
+
+      - name: Demos
+        run: |
+          cargo run --quiet --bin sum_demo
+          cargo run --quiet --bin ownership_demo
+          cargo run --quiet --bin vm_demo
+          cargo run --quiet --bin ownership_proof_demo
+          cargo run --quiet --bin refines_demo
+          cargo run --quiet --bin region_demo
+          cargo run --quiet --bin mem_plan_demo
+          cargo run --quiet --bin surface_mem_demo

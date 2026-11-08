@@ -957,7 +957,7 @@ pub fn run(prog: &BcProgram, entry: usize) -> Result<VmResult, String> {
     }
 }
 
-fn pop_int(frames: &mut Vec<Frame>) -> Result<i64, String> {
+fn pop_int(frames: &mut [Frame]) -> Result<i64, String> {
     frames
         .last_mut()
         .unwrap()
@@ -967,7 +967,7 @@ fn pop_int(frames: &mut Vec<Frame>) -> Result<i64, String> {
         .as_int()
 }
 
-fn pop_bool(frames: &mut Vec<Frame>) -> Result<bool, String> {
+fn pop_bool(frames: &mut [Frame]) -> Result<bool, String> {
     frames
         .last_mut()
         .unwrap()
@@ -977,9 +977,7 @@ fn pop_bool(frames: &mut Vec<Frame>) -> Result<bool, String> {
         .as_bool()
 }
 
-fn pop_array(
-    frames: &mut Vec<Frame>,
-) -> Result<std::rc::Rc<std::cell::RefCell<Vec<Value>>>, String> {
+fn pop_array(frames: &mut [Frame]) -> Result<std::rc::Rc<std::cell::RefCell<Vec<Value>>>, String> {
     frames
         .last_mut()
         .unwrap()
@@ -989,13 +987,13 @@ fn pop_array(
         .as_array()
 }
 
-fn pop2_int(frames: &mut Vec<Frame>) -> Result<(i64, i64), String> {
+fn pop2_int(frames: &mut [Frame]) -> Result<(i64, i64), String> {
     let b = pop_int(frames)?;
     let a = pop_int(frames)?;
     Ok((a, b))
 }
 
-fn bin_i64<F>(frames: &mut Vec<Frame>, f: F) -> Result<(), String>
+fn bin_i64<F>(frames: &mut [Frame], f: F) -> Result<(), String>
 where
     F: FnOnce(i64, i64) -> Option<i64>,
 {
@@ -1005,7 +1003,7 @@ where
     Ok(())
 }
 
-fn bin_bool<F>(frames: &mut Vec<Frame>, f: F) -> Result<(), String>
+fn bin_bool<F>(frames: &mut [Frame], f: F) -> Result<(), String>
 where
     F: FnOnce(i64, i64) -> bool,
 {

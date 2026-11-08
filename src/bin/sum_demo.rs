@@ -36,8 +36,8 @@ fn main() {
 
     println!("\ncomputation (kernel evaluation)");
     let list = env.list_of(&[1, 2, 3, 4, 5]);
-    let r = env.apply("sum_ref", &[list.clone()]);
-    let f = env.apply("sum_fast", &[list.clone()]);
+    let r = env.apply("sum_ref", std::slice::from_ref(&list));
+    let f = env.apply("sum_fast", std::slice::from_ref(&list));
     println!(
         "  sum_ref  [1,2,3,4,5] = {}",
         env.eval_nat(&r)
