@@ -1,0 +1,32 @@
+// Callbacks and higher-order functions.
+//
+// `Fn(T, ...) -> R` is a runtime function type.  A lambda captures the
+// environment read-only; a top-level function name is itself a function value.
+// The same program is available in the s-expression frontend as
+// examples/callbacks.lisp.
+
+fn apply_twice(f: Fn(Int) -> Int, x: Int) -> Int {
+  f(f(x))
+}
+
+fn add_one(x: Int) -> Int {
+  x + 1
+}
+
+fn make_adder(n: Int) -> Fn(Int) -> Int {
+  fn(y: Int) -> Int { y + n }
+}
+
+fn main() -> Int {
+  let double = fn(y: Int) -> Int { y * 2 };
+  let a = apply_twice(double, 5);
+  let b = apply_twice(add_one, 1);
+  let add10 = make_adder(10);
+  let c = add10(7);
+  let d = make_adder(3)(4);
+  print(a);
+  print(b);
+  print(c);
+  print(d);
+  a + b + c + d
+}

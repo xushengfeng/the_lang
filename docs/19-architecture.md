@@ -140,10 +140,10 @@ canonical pipeline 的一层实现，不能三处同时长。
 
 ## 7. 未决问题
 
-1. **闭包捕获语义**：不可变值捕获 vs JS 式共享 cell；后者复制不保语义。
+1. **闭包捕获语义**：当前 surface 用只读值捕获；未来是否引入共享 cell，以及
+   如何在区域/所有权规则下保持语义。
 2. **区域/逃逸推断**：返回值提升、闭包/thunk 逃逸、跨调用生命周期。
-3. **Surface 函数类型/lambda**：MemIR 已有一等闭包/thunk，但表面还没有。
-4. **表示层**：`Repr T R`、布局、字长、精确数值 vs f64/误差界。
-5. **终止/可达性**：`Never` + `Reach = No | Maybe | Yes`、`MayCall`。
-6. **表面证明语言**：`theorem`/hole/tactic/goal JSON；`refines` 自动义务生成。
-7. **VM 冻结**：参考语义版本化、conformance/differential suite。
+3. **表示层**：`Repr T R`、布局、字长、精确数值 vs f64/误差界。
+4. **终止/可达性**：`Never` + `Reach = No | Maybe | Yes`、`MayCall`。
+5. **表面证明语言**：`theorem`/hole/tactic/goal JSON；`refines` 自动义务生成。
+6. **VM 冻结**：参考语义版本化、conformance/differential suite。

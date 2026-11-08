@@ -1,5 +1,7 @@
+use std::rc::Rc;
+
 use super::ir::{BcProgram, Instr, VmResult};
-use crate::ownership::{Stats, Value};
+use crate::ownership::{Closure, Stats, Value};
 
 struct Frame {
     func: usize,
@@ -126,6 +128,61 @@ pub fn run(prog: &BcProgram, entry: usize) -> Result<VmResult, String> {
                     func,
                     pc: 0,
                     locals: args,
+                    stack: Vec::new(),
+                });
+            }
+            Instr::MakeClosure { func, captures } => {
+                let mut values = Vec::with_capacity(captures);
+                for _ in 0..captures {
+                    values.push(
+                        frames
+                            .last_mut()
+                            .unwrap()
+                            .stack
+                            .pop()
+                            .ok_or_else(|| "make-closure with too few captures".to_string())?,
+                    );
+                }
+                values.reverse();
+                frames
+                    .last_mut()
+                    .unwrap()
+                    .stack
+                    .push(Value::Closure(Rc::new(Closure::Bytecode {
+                        func,
+                        captures: values,
+                    })));
+            }
+            Instr::CallClosure { argc } => {
+                let mut args = Vec::with_capacity(argc);
+                for _ in 0..argc {
+                    args.push(
+                        frames
+                            .last_mut()
+                            .unwrap()
+                            .stack
+                            .pop()
+                            .ok_or_else(|| "closure call with too few arguments".to_string())?,
+                    );
+                }
+                args.reverse();
+                let callee = frames
+                    .last_mut()
+                    .unwrap()
+                    .stack
+                    .pop()
+                    .ok_or_else(|| "closure call with empty stack".to_string())?;
+                let Value::Closure(closure) = callee else {
+                    return Err("attempted to call a non-function value".into());
+                };
+                let Closure::Bytecode { func, mut captures } = (*closure).clone() else {
+                    return Err("surface closure cannot run in the bytecode VM".into());
+                };
+                captures.extend(args);
+                frames.push(Frame {
+                    func,
+                    pc: 0,
+                    locals: captures,
                     stack: Vec::new(),
                 });
             }

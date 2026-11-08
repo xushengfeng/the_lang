@@ -50,6 +50,8 @@ pub enum MemExpr {
         name: String,
         args: Vec<MemExpr>,
     },
+    /// Reference to a top-level function as a value.
+    FnRef(String),
     Lambda {
         params: Vec<String>,
         body: Box<MemExpr>,

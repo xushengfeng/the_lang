@@ -125,11 +125,15 @@ pub(super) fn borrow_arg(ctx: &Ctx, arg: &Expr, param: &str, fname: &str) -> Res
 }
 
 /// Passing to a `Val` parameter: read-only, no move.
+///
+/// A bare name may also be a top-level function used as a callback, in which
+/// case it has no entry in the variable context.
 pub(super) fn read_arg(ctx: &Ctx, arg: &Expr, param: &str, fname: &str) -> Result<(), String> {
     if let Expr::Var(v) = arg {
-        let info = ctx.info(v)?;
-        if info.consumed {
-            return Err(format!("use of moved value `{v}`"));
+        if let Some(info) = ctx.vars.get(v) {
+            if info.consumed {
+                return Err(format!("use of moved value `{v}`"));
+            }
         }
     }
     let _ = (param, fname);

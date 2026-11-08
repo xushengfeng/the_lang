@@ -17,7 +17,14 @@ fn main() {
             process::exit(2);
         }
     };
-    match syntax::parse(&src) {
+    let is_lisp =
+        args[1].ends_with(".lisp") || args[1].ends_with(".lsp") || args[1].ends_with(".sexp");
+    let parsed = if is_lisp {
+        syntax::parse_lisp(&src)
+    } else {
+        syntax::parse(&src)
+    };
+    match parsed {
         Ok(prog) => {
             for d in &prog.decls {
                 match d {

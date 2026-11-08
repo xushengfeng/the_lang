@@ -76,6 +76,41 @@ fn rejects_move_borrow() {
 }
 
 #[test]
+fn callbacks_and_closures_run() {
+    let src = r#"
+        fn apply_twice(f: Fn(Int) -> Int, x: Int) -> Int {
+          f(f(x))
+        }
+        fn add_one(x: Int) -> Int { x + 1 }
+        fn make_adder(n: Int) -> Fn(Int) -> Int {
+          fn(y: Int) -> Int { y + n }
+        }
+        fn main() -> Int {
+          let double = fn(y: Int) -> Int { y * 2 };
+          let a = apply_twice(double, 5);
+          let b = apply_twice(add_one, 1);
+          let add10 = make_adder(10);
+          let c = make_adder(3)(4);
+          a + b + add10(7) + c
+        }
+    "#;
+    let prog = check_source(src).unwrap();
+    let r = run(&prog, "main").unwrap();
+    assert_eq!(r.value.to_string(), "47");
+}
+
+#[test]
+fn rejects_lambda_capturing_borrow() {
+    let src = r#"
+        fn bad(borrow a: Array<Int>) -> Fn(Int) -> Int {
+          fn(i: Int) -> Int { a[i] }
+        }
+    "#;
+    let err = check_source(src).unwrap_err();
+    assert!(err.contains("may not capture borrow"), "{err}");
+}
+
+#[test]
 fn rejects_stored_borrow() {
     let src = r#"
         fn bad(borrow a: Array<Int>) -> Array<Array<Int>> { [a] }

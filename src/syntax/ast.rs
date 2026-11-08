@@ -67,7 +67,15 @@ pub enum Ty {
     Bool,
     Unit,
     Array(Box<Ty>),
+    /// Runtime function value: `Fn(T1, T2) -> R`.
+    Fn(Vec<Ty>, Box<Ty>),
     Prop,
+}
+
+#[derive(Clone, Debug)]
+pub struct LambdaParam {
+    pub name: String,
+    pub ty: Ty,
 }
 
 #[derive(Clone, Debug)]
@@ -88,7 +96,23 @@ pub enum Expr {
     Bin(BinOp, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Let(String, Box<Expr>, Box<Expr>),
-    Call { name: String, args: Vec<CallArg> },
+    Call {
+        name: String,
+        args: Vec<CallArg>,
+    },
+    /// Reference to a top-level function used as a value.
+    FnRef(String),
+    /// Anonymous function that captures its environment.
+    Lambda {
+        params: Vec<LambdaParam>,
+        ret: Ty,
+        body: Box<Expr>,
+    },
+    /// Apply a function value (not a statically known function name).
+    Apply {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
     Index(Box<Expr>, Box<Expr>),
     Seq(Box<Expr>, Box<Expr>),
 }

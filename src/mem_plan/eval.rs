@@ -171,6 +171,17 @@ pub(crate) fn eval(
             .cloned()
             .ok_or_else(|| EvalError::UnknownVar(name.clone())),
         MemExpr::Call { name, args } => eval_call(name, args, heap, env, region, program),
+        MemExpr::FnRef(name) => {
+            let f = program
+                .get(name)
+                .ok_or_else(|| EvalError::UnknownFunction(name.clone()))?;
+            heap.record_closures(1);
+            Ok(Value::Closure(Rc::new(Closure {
+                params: f.params.clone(),
+                body: f.body.clone(),
+                env: HashMap::new(),
+            })))
+        }
         MemExpr::Lambda { params, body } => {
             heap.record_closures(1);
             Ok(Value::Closure(Rc::new(Closure {

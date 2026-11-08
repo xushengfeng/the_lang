@@ -5,7 +5,7 @@ use super::rules::*;
 use super::types::*;
 use super::uses::{count_uses, result_borrow};
 use crate::syntax::{
-    parse, BinOp, CallArg, Decl, Expr, FnDecl, Mode, ParamKind, Program, Ty, UnOp,
+    parse, parse_lisp, BinOp, CallArg, Decl, Expr, FnDecl, Mode, ParamKind, Program, Ty, UnOp,
 };
 
 pub fn check_program(prog: &Program) -> Result<CheckedProgram, String> {
@@ -31,6 +31,107 @@ pub fn check_program(prog: &Program) -> Result<CheckedProgram, String> {
 pub fn check_source(src: &str) -> Result<CheckedProgram, String> {
     let prog = parse(src).map_err(|e| e.to_string())?;
     check_program(&prog)
+}
+
+pub fn check_source_lisp(src: &str) -> Result<CheckedProgram, String> {
+    let prog = parse_lisp(src).map_err(|e| e.to_string())?;
+    check_program(&prog)
+}
+
+fn function_ty(sig: &FnSig) -> Ty {
+    Ty::Fn(
+        sig.params
+            .iter()
+            .filter(|p| !p.is_proof)
+            .map(|p| p.ty.clone())
+            .collect(),
+        Box::new(sig.ret.clone()),
+    )
+}
+
+fn call_args_to_exprs(args: &[CallArg]) -> Result<Vec<Expr>, String> {
+    args.iter()
+        .map(|arg| match arg {
+            CallArg::Expr(e) => Ok(e.clone()),
+            CallArg::Proof(_) => Err("proof arguments require a named function call".into()),
+        })
+        .collect()
+}
+
+/// Variables referenced by `body` that are not bound by `bound` or by a
+/// nested lambda/let.
+fn lambda_free_vars(body: &Expr, params: &HashSet<String>) -> Vec<String> {
+    fn go(e: &Expr, bound: &mut HashSet<String>, out: &mut Vec<String>) {
+        match e {
+            Expr::Var(name) => {
+                if !bound.contains(name) && !out.contains(name) {
+                    out.push(name.clone());
+                }
+            }
+            Expr::Int(_) | Expr::Bool(_) | Expr::Unit | Expr::FnRef(_) => {}
+            Expr::Array(items) => {
+                for item in items {
+                    go(item, bound, out);
+                }
+            }
+            Expr::Un(_, inner) => go(inner, bound, out),
+            Expr::Bin(_, l, r) => {
+                go(l, bound, out);
+                go(r, bound, out);
+            }
+            Expr::If(c, t, e) => {
+                go(c, bound, out);
+                go(t, bound, out);
+                go(e, bound, out);
+            }
+            Expr::Let(name, value, body) => {
+                go(value, bound, out);
+                let inserted = bound.insert(name.clone());
+                go(body, bound, out);
+                if inserted {
+                    bound.remove(name);
+                }
+            }
+            Expr::Call { args, .. } => {
+                for arg in args {
+                    if let CallArg::Expr(e) = arg {
+                        go(e, bound, out);
+                    }
+                }
+            }
+            Expr::Lambda { params, body, .. } => {
+                let mut added = Vec::new();
+                for p in params {
+                    if bound.insert(p.name.clone()) {
+                        added.push(p.name.clone());
+                    }
+                }
+                go(body, bound, out);
+                for name in added {
+                    bound.remove(&name);
+                }
+            }
+            Expr::Apply { callee, args } => {
+                go(callee, bound, out);
+                for arg in args {
+                    go(arg, bound, out);
+                }
+            }
+            Expr::Index(base, index) => {
+                go(base, bound, out);
+                go(index, bound, out);
+            }
+            Expr::Seq(a, b) => {
+                go(a, bound, out);
+                go(b, bound, out);
+            }
+        }
+    }
+
+    let mut bound = params.clone();
+    let mut out = Vec::new();
+    go(body, &mut bound, &mut out);
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -168,12 +269,28 @@ impl Checker {
     fn check_expr(&self, ctx: &mut Ctx, e: &Expr) -> Result<(Ty, Expr), String> {
         match e {
             Expr::Var(name) => {
-                let info = ctx.info(name)?;
-                if info.consumed {
-                    return Err(format!("use of moved value `{name}`"));
+                if let Some(info) = ctx.vars.get(name) {
+                    if info.consumed {
+                        return Err(format!("use of moved value `{name}`"));
+                    }
+                    return Ok((info.ty.clone(), Expr::Var(name.clone())));
                 }
-                Ok((info.ty.clone(), Expr::Var(name.clone())))
+                // A bare function name used in expression position is a
+                // first-class function value (a callback).
+                if let Some(sig) = self.funcs.get(name) {
+                    return Ok((function_ty(sig), Expr::FnRef(name.clone())));
+                }
+                Err(format!("unknown variable `{name}`"))
             }
+            Expr::FnRef(name) => {
+                let sig = self
+                    .funcs
+                    .get(name)
+                    .ok_or_else(|| format!("unknown function `{name}`"))?;
+                Ok((function_ty(sig), Expr::FnRef(name.clone())))
+            }
+            Expr::Lambda { params, ret, body } => self.check_lambda(ctx, params, ret, body),
+            Expr::Apply { callee, args } => self.check_apply(ctx, callee, args),
             Expr::Int(n) => Ok((Ty::Int, Expr::Int(*n))),
             Expr::Bool(b) => Ok((Ty::Bool, Expr::Bool(*b))),
             Expr::Unit => Ok((Ty::Unit, Expr::Unit)),
@@ -430,11 +547,17 @@ impl Checker {
                 ))
             }
             _ => {
-                let sig = self
-                    .funcs
-                    .get(name)
-                    .cloned()
-                    .ok_or_else(|| format!("unknown function `{name}`"))?;
+                if !self.funcs.contains_key(name) {
+                    if let Ok(info) = ctx.info(name) {
+                        if matches!(info.ty, Ty::Fn(..)) {
+                            let exprs = call_args_to_exprs(args)?;
+                            return self.check_apply(ctx, &Expr::Var(name.to_string()), &exprs);
+                        }
+                        return Err(format!("`{name}` is not a function"));
+                    }
+                    return Err(format!("unknown function `{name}`"));
+                }
+                let sig = self.funcs.get(name).cloned().unwrap();
 
                 let mut runtime_args = Vec::new();
                 let mut arg_i = 0usize;
@@ -496,6 +619,128 @@ impl Checker {
                 ))
             }
         }
+    }
+
+    fn check_lambda(
+        &self,
+        ctx: &mut Ctx,
+        params: &[crate::syntax::LambdaParam],
+        ret: &Ty,
+        body: &Expr,
+    ) -> Result<(Ty, Expr), String> {
+        let mut names = HashSet::new();
+        for p in params {
+            if !names.insert(p.name.clone()) {
+                return Err(format!("duplicate lambda parameter `{}`", p.name));
+            }
+            if ctx.vars.contains_key(&p.name) {
+                return Err(format!(
+                    "lambda parameter `{}` shadows an outer variable; use a fresh name",
+                    p.name
+                ));
+            }
+        }
+
+        let free = lambda_free_vars(body, &names);
+        let mut inner = ctx.clone();
+        let mut captures = Vec::new();
+        for name in &free {
+            let Some(info) = ctx.vars.get(name).cloned() else {
+                continue;
+            };
+            if info.mode == Mode::Borrow {
+                return Err(format!(
+                    "lambda may not capture borrow `{name}`; pass it as a parameter"
+                ));
+            }
+            // Captured values are read-only inside a closure: the closure may
+            // be called more than once, so it may not move or mutate them.
+            let entry = inner
+                .vars
+                .get_mut(name)
+                .expect("captured variable present in cloned context");
+            entry.unique = false;
+            entry.mode = Mode::Val;
+            entry.consumed = false;
+            inner.borrow_names.remove(name);
+            captures.push(name.clone());
+        }
+
+        for p in params {
+            inner.vars.insert(
+                p.name.clone(),
+                VarInfo {
+                    ty: p.ty.clone(),
+                    mode: Mode::Val,
+                    unique: false,
+                    consumed: false,
+                    uses: *inner.uses.get(&p.name).unwrap_or(&0),
+                },
+            );
+        }
+
+        let (body_ty, body) = self.check_expr(&mut inner, body)?;
+        if body_ty != *ret {
+            return Err(format!("lambda returns `{body_ty}`, expected `{ret}`"));
+        }
+        for name in &captures {
+            if inner.vars.get(name).map(|i| i.consumed).unwrap_or(false) {
+                return Err(format!("lambda may not consume captured value `{name}`"));
+            }
+        }
+        for p in params {
+            inner.vars.remove(&p.name);
+        }
+
+        let ty = Ty::Fn(
+            params.iter().map(|p| p.ty.clone()).collect(),
+            Box::new(ret.clone()),
+        );
+        Ok((
+            ty,
+            Expr::Lambda {
+                params: params.to_vec(),
+                ret: ret.clone(),
+                body: Box::new(body),
+            },
+        ))
+    }
+
+    fn check_apply(
+        &self,
+        ctx: &mut Ctx,
+        callee: &Expr,
+        args: &[Expr],
+    ) -> Result<(Ty, Expr), String> {
+        let (callee_ty, callee) = self.check_expr(ctx, callee)?;
+        let (param_tys, ret) = match callee_ty {
+            Ty::Fn(params, ret) => (params, *ret),
+            other => return Err(format!("cannot call value of type `{other}`")),
+        };
+        if args.len() != param_tys.len() {
+            return Err(format!(
+                "function value expects {} arguments, got {}",
+                param_tys.len(),
+                args.len()
+            ));
+        }
+        let mut checked = Vec::with_capacity(args.len());
+        for (arg, expected) in args.iter().zip(&param_tys) {
+            let (ty, expr) = self.check_expr(ctx, arg)?;
+            if ty != *expected {
+                return Err(format!(
+                    "function argument has type `{ty}`, expected `{expected}`"
+                ));
+            }
+            checked.push(expr);
+        }
+        Ok((
+            ret,
+            Expr::Apply {
+                callee: Box::new(callee),
+                args: checked,
+            },
+        ))
     }
 
     fn one_expr_arg(

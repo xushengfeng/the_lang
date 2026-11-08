@@ -10,8 +10,12 @@ pub enum Instr {
     Add,
     Sub,
     Mul,
-    Div { checked: bool },
-    Mod { checked: bool },
+    Div {
+        checked: bool,
+    },
+    Mod {
+        checked: bool,
+    },
     Neg,
     Eq,
     Ne,
@@ -22,12 +26,30 @@ pub enum Instr {
     Not,
     Jump(usize),
     JumpIfFalse(usize),
-    Call { func: usize, argc: usize },
+    Call {
+        func: usize,
+        argc: usize,
+    },
+    /// Pop `captures` values and build a closure for a lifted function.
+    MakeClosure {
+        func: usize,
+        captures: usize,
+    },
+    /// Call a function value: stack has the callee followed by its arguments.
+    CallClosure {
+        argc: usize,
+    },
     Ret,
     MakeArray(usize),
-    ArrayGet { checked: bool },
-    ArraySet { in_place: bool },
-    ArrayPush { in_place: bool },
+    ArrayGet {
+        checked: bool,
+    },
+    ArraySet {
+        in_place: bool,
+    },
+    ArrayPush {
+        in_place: bool,
+    },
     Len,
     Print,
     Pop,
@@ -40,6 +62,7 @@ pub enum BType {
     Bool,
     Unit,
     Array(Box<BType>),
+    Fn(Vec<BType>, Box<BType>),
 }
 
 impl BType {
@@ -49,6 +72,13 @@ impl BType {
             crate::syntax::Ty::Bool => Ok(BType::Bool),
             crate::syntax::Ty::Unit => Ok(BType::Unit),
             crate::syntax::Ty::Array(t) => Ok(BType::Array(Box::new(Self::from_ty(t)?))),
+            crate::syntax::Ty::Fn(params, ret) => Ok(BType::Fn(
+                params
+                    .iter()
+                    .map(Self::from_ty)
+                    .collect::<Result<Vec<_>, _>>()?,
+                Box::new(Self::from_ty(ret)?),
+            )),
             crate::syntax::Ty::Prop => Err("Prop must be erased before bytecode".to_string()),
         }
     }

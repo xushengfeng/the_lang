@@ -7,7 +7,11 @@
 use std::env;
 use std::fs;
 
-use alethe::ownership::{check_source, run};
+use alethe::ownership::{check_source, check_source_lisp, run};
+
+fn is_lisp(path: &str) -> bool {
+    path.ends_with(".lisp") || path.ends_with(".lsp") || path.ends_with(".sexp")
+}
 
 fn main() {
     let path = env::args()
@@ -21,7 +25,12 @@ fn main() {
         }
     };
 
-    let prog = match check_source(&src) {
+    let checked = if is_lisp(&path) {
+        check_source_lisp(&src)
+    } else {
+        check_source(&src)
+    };
+    let prog = match checked {
         Ok(p) => p,
         Err(e) => {
             eprintln!("ownership check failed:\n{e}");

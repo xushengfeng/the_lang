@@ -36,6 +36,14 @@ pub(super) fn count_uses(e: &Expr, out: &mut HashMap<String, usize>) {
                 }
             }
         }
+        Expr::FnRef(_) => {}
+        Expr::Lambda { body, .. } => count_uses(body, out),
+        Expr::Apply { callee, args } => {
+            count_uses(callee, out);
+            for arg in args {
+                count_uses(arg, out);
+            }
+        }
         Expr::Index(a, b) => {
             count_uses(a, out);
             count_uses(b, out);
@@ -70,6 +78,9 @@ pub(super) fn result_borrow(e: &Expr, result_ty: &Ty, borrows: &HashSet<String>)
             CallArg::Expr(e) => first_borrow(e, borrows),
             CallArg::Proof(_) => None,
         }),
+        Expr::FnRef(_) | Expr::Lambda { .. } => None,
+        Expr::Apply { callee, args } => first_borrow(callee, borrows)
+            .or_else(|| args.iter().find_map(|a| first_borrow(a, borrows))),
         Expr::Index(a, _) => first_borrow(a, borrows),
         Expr::Un(_, e) => first_borrow(e, borrows),
         Expr::Bin(_, a, b) => first_borrow(a, borrows).or_else(|| first_borrow(b, borrows)),
@@ -93,6 +104,9 @@ pub(super) fn first_borrow(e: &Expr, borrows: &HashSet<String>) -> Option<String
             CallArg::Expr(e) => first_borrow(e, borrows),
             CallArg::Proof(_) => None,
         }),
+        Expr::FnRef(_) | Expr::Lambda { .. } => None,
+        Expr::Apply { callee, args } => first_borrow(callee, borrows)
+            .or_else(|| args.iter().find_map(|a| first_borrow(a, borrows))),
         Expr::Index(a, b) => first_borrow(a, borrows).or_else(|| first_borrow(b, borrows)),
         Expr::Seq(_, b) => first_borrow(b, borrows),
     }

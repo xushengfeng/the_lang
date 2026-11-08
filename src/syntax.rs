@@ -6,10 +6,12 @@
 
 mod ast;
 mod lexer;
+mod lisp;
 mod parser;
 mod pretty;
 
 pub use ast::*;
 pub use lexer::*;
+pub use lisp::*;
 pub use parser::*;
 pub use pretty::*;

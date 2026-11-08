@@ -5,11 +5,15 @@
 use std::env;
 use std::fs;
 
-use alethe::ownership::check_source;
+use alethe::ownership::{check_source, check_source_lisp};
 use alethe::refines::check_program as check_refines;
 use alethe::refines_proof::ProofStore;
-use alethe::syntax::parse;
+use alethe::syntax::{parse, parse_lisp};
 use alethe::vm::{compile, run, verify};
+
+fn is_lisp(path: &str) -> bool {
+    path.ends_with(".lisp") || path.ends_with(".lsp") || path.ends_with(".sexp")
+}
 
 fn main() {
     let path = env::args()
@@ -22,14 +26,24 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let prog = match parse(&src) {
+    let parsed = if is_lisp(&path) {
+        parse_lisp(&src)
+    } else {
+        parse(&src)
+    };
+    let prog = match parsed {
         Ok(p) => p,
         Err(e) => {
             eprintln!("parse error: {e}");
             std::process::exit(1);
         }
     };
-    let checked = match check_source(&src) {
+    let checked = if is_lisp(&path) {
+        check_source_lisp(&src)
+    } else {
+        check_source(&src)
+    };
+    let checked = match checked {
         Ok(p) => p,
         Err(e) => {
             eprintln!("ownership check failed:\n{e}");

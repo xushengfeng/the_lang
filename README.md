@@ -20,6 +20,9 @@ cargo run --bin refines_demo
 cargo run --bin region_demo
 cargo run --bin mem_plan_demo
 cargo run --bin surface_mem_demo
+cargo run --bin ownership_demo -- examples/callbacks.alt
+cargo run --bin ownership_demo -- examples/callbacks.lisp
+cargo run --bin vm_demo -- examples/callbacks.alt
 ```
 
 `sum_demo` 会输出：
@@ -48,6 +51,19 @@ cargo run --bin alethe -- examples/checks.alt
 ```
 
 它目前只做解析/AST 展示，尚未接到依赖类型内核。内核是当前主线。
+
+`examples/callbacks.alt` 和 `examples/callbacks.lisp` 是同一个程序：函数类型、lambda、把顶层函数当值传递、嵌套闭包。`.lisp`/`.lsp`/`.sexp` 文件会自动走 S-expression 前端，并降到和 `.alt` 相同的 `Program` AST；后续检查器、解释器和 VM 完全共享：
+
+```text
+fn apply_twice(f: Fn(Int) -> Int, x: Int) -> Int { f(f(x)) }
+fn add_one(x: Int) -> Int { x + 1 }
+...
+```
+
+```lisp
+(fn apply_twice ((f (fn (Int) Int)) (x Int)) Int
+  (f (f x)))
+```
 
 ## 仓库地图
 
@@ -100,8 +116,11 @@ cargo run --bin alethe -- examples/checks.alt
 | `src/syntax/ast.rs` | 表面 AST：`Decl`、`FnDecl`、`Ty`、`Expr`、`PExpr` |
 | `src/syntax/lexer.rs` | 词法分析 |
 | `src/syntax/parser.rs` | parser |
+| `src/syntax/lisp.rs` | S-expression 前端（降到同一 `Program` AST） |
 | `src/syntax/pretty.rs` | AST pretty printing |
-| `src/main.rs` | 表面语法原型 CLI |
+| `src/main.rs` | 表面语法原型 CLI（`.alt` / `.lisp`） |
+| `examples/callbacks.alt` | 回调/高阶函数示例（缩进语法） |
+| `examples/callbacks.lisp` | 同一示例（S-expression 语法） |
 | `docs/` | 设计、验证风格、内核、类型/运行时、AI 优化、硬件无关、可行性、路线图 |
 
 ## 文档索引
@@ -126,6 +145,7 @@ cargo run --bin alethe -- examples/checks.alt
 18. [区域内存模型（无 RC/GC）](docs/18-region-memory.md)
 19. [架构与信任边界](docs/19-architecture.md)
 20. [决策记录与开放问题](docs/09-decisions.md)
+21. [表面语法：缩进语法与 S-expression](docs/20-surface-syntax.md)
 
 ## 模型优先
 
@@ -148,8 +168,9 @@ cargo run --bin alethe -- examples/checks.alt
 | RC / GC | 不作为当前路线（`docs/18`） | ❌ |
 | 区域/生命周期约束 | ✅ 规则 | ❌ |
 | 区域堆：分配/释放/原地/复制 | ✅ 模型 | ✅ `RegionHeap` + planner + surface 桥 + 普通函数调用 |
-| MemIR 闭包/thunk | ✅ 模型 | ✅ `Lambda`/`Apply`/`Thunk`/`Force` |
-| 表面函数类型 / lambda | ✅ 设计 | ❌ |
+| MemIR 闭包/thunk | ✅ 模型 | ✅ `Lambda`/`Apply`/`FnRef`/`Thunk`/`Force` |
+| 表面函数类型 / lambda / 回调 | ✅ 设计 | ✅ `Ty::Fn` + lambda + 顶层函数值；解释器和 VM 均支持 |
+| 表面 Lisp 语法 | ✅ 便利前端 | ✅ `.lisp`/`.lsp`/`.sexp` 降到同一 AST |
 | 效果 row（pure/read/write/alloc/io） | ✅ 规则 | ❌ |
 | 结构体/变体/切片 | ✅ 类型 | ❌ |
 | 字节码语法/栈类型 | ✅ 规格 | ✅ 实现（含验证器） |
@@ -165,7 +186,7 @@ cargo run --bin alethe -- examples/checks.alt
 
 **已跑通**
 
-- 74 个单元测试 + 8 个集成测试通过；
+- 全部单元测试和集成测试通过（含回调/闭包、Lisp 前端）；
 - 依赖类型内核的类型检查与定义等价；
 - `Nat.rec` / `List.rec` / `Eq.subst` 的归约；
 - `add_assoc`、`add_zero`、`go_eq`、`sum_fast_eq` 的证明检查；
@@ -177,7 +198,8 @@ cargo run --bin alethe -- examples/checks.alt
 - checked surface 桥：`plan_checked_fn` + `run_fn_in` 把 `ownership::CheckedFn` 的 `set`/`push` 直接降到区域堆执行；`fill` 原地、`fill_shared` 复制、`grow` 原地 push 已跑通；
 - 普通函数调用：`plan_checked_program` + `run_program`；每次调用一个区域，标量返回释放，被调用者新建的数组返回值复制到调用者区域；`fill(a, 9)` 原地、`make(7)` 返回复制已跑通；
 - 直接 `if`：降成 primitive branch，只执行选中分支，不构造分支闭包；`optimized=false` 时构造两个分支 thunk 并只强制选中一个，`MemStats.thunks` 计数；
-- MemIR 一等函数/闭包：`Lambda`/`Apply`/`Thunk`/`Force`；闭包捕获环境，thunk 是零参延迟值；`MemStats.closures` 计数；
+- MemIR 一等函数/闭包：`Lambda`/`Apply`/`FnRef`/`Thunk`/`Force`；闭包捕获环境，thunk 是零参延迟值；`MemStats.closures` 计数；
+- 表面回调/高阶函数：`Fn(T, ...) -> R` 类型、`fn(x: T) -> R { ... }` lambda、顶层函数名作为函数值、通过函数值调用、嵌套闭包；ownership 检查器、树解释器和字节码 VM 都支持；VM 通过 lambda lifting + `MakeClosure`/`CallClosure` 执行；`examples/callbacks.alt` 与 `examples/callbacks.lisp` 结果一致；
 - MemIR 静态验证器：scope、类型、调用 arity、if 分支类型；`run_program_in` 执行前验证；
 - 工程收口：`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --all-targets` 和 demo smoke 已进 CI；
 - `src/mem_plan` 拆成 `ir`/`planner`/`eval`/`bridge`/`validate`，并有 `tests/` 集成测试；
@@ -213,6 +235,6 @@ cargo run --bin alethe -- examples/checks.alt
 - `Vec`/`Fin` 与更真实的数组/边界证明；
 - `spec` / `impl` / `refines` 多实现；
 - 完整区域/借用生命周期（当前是简化版唯一性检查）；
-- IR/ANF、字节码验证器、闭包；
+- IR/ANF；闭包逃逸分析与区域提升（当前 lambda 只读捕获，不能捕获 borrow，也不能跨区域返回）；
 - 表示层（布局、字长、进制）与翻译验证；
 - SMT 证书、证明搜索、LLM 候选生成。

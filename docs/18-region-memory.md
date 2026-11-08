@@ -100,12 +100,16 @@ Heap   = RegionId ⇀ Region
 - `MemExpr::If { optimized: false }` 构造两个分支 thunk（捕获当前环境），
   只强制选中的一个；`MemStats.thunks` 会计数；
 - MemIR 里 thunk/closure 已是一等值：`MemExpr::Lambda` / `Apply` /
-  `Thunk` / `Force`，可以绑定、传递、调用；`MemStats.closures` 计数；
+  `FnRef` / `Thunk` / `Force`，可以绑定、传递、调用；`MemStats.closures` 计数；
 - thunk 目前是“零参闭包 + 环境 + body”，`Force` 直接求值，没有 memoization；
   `if` 的 thunk 最多 force 一次，所以不需要缓存；
 - thunk/closure 还不能存进数组，也不能跨函数返回；区域逃逸会拒绝；
-  表面语言还没有函数类型和 lambda；
-- 算术、`print`、动态下标暂不支持。
+- 表面语言已有 `Ty::Fn`、lambda、顶层函数值（`FnRef`）和函数值调用：
+  `fn apply(f: Fn(Int) -> Int, x: Int) -> Int { f(x) }`；
+- lambda 捕获环境是只读的：可以读捕获值，但不能 move、原地修改或捕获
+  `borrow`；因此 `set` 对捕获数组会走复制路径；
+- MemIR 桥把 surface lambda/函数值降成 `Lambda`/`FnRef`/`Apply`；
+  算术、`print`、动态下标在 MemIR 里仍不支持。
 
 Thunk 和闭包的区别：
 
@@ -132,13 +136,11 @@ thunk/闭包构造。当前 surface 只走直接形式，MemIR 已有一等闭�
 展示规划器、闭包/thunk 和统计；`cargo run --bin surface_mem_demo`
 展示 checked surface 函数和普通函数调用在区域堆上的执行。
 
-当前边界：只有 `Int` 数组；surface 还没有函数类型和 lambda；MemIR 的
-闭包/thunk 还不能跨函数返回或跨区域逃逸；返回值按复制处理，还没有区域提升；
-顶层返回值留在调用者区域，由调用者释放。
+当前边界：只有 `Int` 数组；MemIR 的闭包/thunk 还不能跨函数返回或跨区域逃逸；
+返回值按复制处理，还没有区域提升；顶层返回值留在调用者区域，由调用者释放。
 
 ## 6. 下一步
 
-1. 加表面函数类型/lambda，把闭包和 thunk 接到 surface；
-2. 实现逃逸分析/区域提升，支持闭包/thunk 逃逸和返回值；
-3. 加非逃逸值的栈分配和 `borrow`/`borrow_mut`；
-4. 用一个真实函数证明“区域安全 + 原地精化”的端到端闭环。
+1. 实现逃逸分析/区域提升，支持闭包/thunk 逃逸和返回值；
+2. 加非逃逸值的栈分配和 `borrow`/`borrow_mut`；
+3. 用一个真实函数证明“区域安全 + 原地精化”的端到端闭环。

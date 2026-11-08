@@ -44,6 +44,44 @@ fn vm_matches_interpreter() {
 }
 
 #[test]
+fn vm_runs_callbacks_and_closures() {
+    let src = r#"
+        fn apply_twice(f: Fn(Int) -> Int, x: Int) -> Int {
+          f(f(x))
+        }
+        fn add_one(x: Int) -> Int { x + 1 }
+        fn main() -> Int {
+          let double = fn(y: Int) -> Int { y * 2 };
+          let a = apply_twice(double, 5);
+          let b = apply_twice(add_one, 1);
+          a + b
+        }
+    "#;
+    let checked = check_source(src).unwrap();
+    let bc = compile(&checked).unwrap();
+    verify(&bc).unwrap();
+    let r = run(&bc, bc.main).unwrap();
+    let interp = interp_run(&checked, "main").unwrap();
+    assert_eq!(r.value.to_string(), "23");
+    assert_eq!(r.value.to_string(), interp.value.to_string());
+}
+
+#[test]
+fn vm_lifts_nested_closures() {
+    let src = r#"
+        fn make_adder(n: Int) -> Fn(Int) -> Int {
+          fn(y: Int) -> Int { y + n }
+        }
+        fn main() -> Int { make_adder(10)(7) }
+    "#;
+    let checked = check_source(src).unwrap();
+    let bc = compile(&checked).unwrap();
+    verify(&bc).unwrap();
+    let r = run(&bc, bc.main).unwrap();
+    assert_eq!(r.value.to_string(), "17");
+}
+
+#[test]
 fn verifier_rejects_stack_underflow() {
     let bc = one_func(vec![Instr::Add, Instr::Ret], BType::Int);
     let err = verify(&bc).unwrap_err();

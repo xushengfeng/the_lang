@@ -166,6 +166,10 @@ fn ty_to_mem(ty: &Ty) -> MemType {
         Ty::Bool => MemType::Bool,
         Ty::Unit => MemType::Unit,
         Ty::Array(_) => MemType::Array,
+        Ty::Fn(params, ret) => MemType::Fun(
+            params.iter().map(ty_to_mem).collect(),
+            Box::new(ty_to_mem(ret)),
+        ),
         Ty::Prop => MemType::Unknown,
     }
 }
@@ -200,6 +204,15 @@ fn infer(
                 let _ = index;
             }
             Ok(ty_to_mem(&f.ret))
+        }
+        MemExpr::FnRef(name) => {
+            let f = prog
+                .get(name)
+                .ok_or_else(|| ValidateError::UnknownFunction(name.clone()))?;
+            Ok(MemType::Fun(
+                f.param_tys.iter().map(ty_to_mem).collect(),
+                Box::new(ty_to_mem(&f.ret)),
+            ))
         }
         MemExpr::Lambda { params, body } => {
             let mut inner = env.clone();
@@ -297,8 +310,28 @@ fn infer(
     }
 }
 
+/// `Unknown` is a wildcard, including inside function and thunk types.  This
+/// lets a typed callback parameter accept a lambda whose parameter types were
+/// not recorded in MemIR.
+fn compatible(got: &MemType, expected: &MemType) -> bool {
+    match (got, expected) {
+        (MemType::Unknown, _) | (_, MemType::Unknown) => true,
+        (MemType::Int, MemType::Int)
+        | (MemType::Bool, MemType::Bool)
+        | (MemType::Unit, MemType::Unit)
+        | (MemType::Array, MemType::Array) => true,
+        (MemType::Fun(gp, gr), MemType::Fun(ep, er)) => {
+            gp.len() == ep.len()
+                && gp.iter().zip(ep).all(|(g, e)| compatible(g, e))
+                && compatible(gr, er)
+        }
+        (MemType::Thunk(g), MemType::Thunk(e)) => compatible(g, e),
+        _ => false,
+    }
+}
+
 fn expect(got: MemType, expected: MemType, what: &'static str) -> Result<(), ValidateError> {
-    if got == MemType::Unknown || expected == MemType::Unknown || got == expected {
+    if compatible(&got, &expected) {
         Ok(())
     } else {
         Err(ValidateError::TypeMismatch {
@@ -314,7 +347,7 @@ fn unify(then_ty: MemType, else_ty: MemType) -> Result<MemType, ValidateError> {
         Ok(then_ty)
     } else if then_ty == MemType::Unknown {
         Ok(else_ty)
-    } else if else_ty == MemType::Unknown {
+    } else if else_ty == MemType::Unknown || compatible(&then_ty, &else_ty) {
         Ok(then_ty)
     } else {
         Err(ValidateError::IfBranchMismatch { then_ty, else_ty })

@@ -74,8 +74,9 @@
 - [x] 内存规划器 + MemIR（`src/mem_plan.rs`）：move/downgrade/copy、原地/复制选择；
 - [x] 普通函数调用 + 每调用区域 + 返回值复制；
 - [x] 直接 `if` primitive branch + thunk 回退（`optimized=false`）；
-- [x] MemIR 一等闭包/thunk（`Lambda`/`Apply`/`Thunk`/`Force`）；
-- [ ] 表面函数类型 / lambda；
+- [x] MemIR 一等闭包/thunk（`Lambda`/`Apply`/`FnRef`/`Thunk`/`Force`）；
+- [x] 表面函数类型 / lambda / 回调（解释器和 VM；VM 用 lambda lifting）；
+- [x] 表面 S-expression 前端（降到同一 AST）；
 - [ ] 逃逸分析 / 区域提升 / 闭包逃逸；
 - [ ] 区域推断（至少栈式区域）；
 - [ ] 显式 `&`/`&mut` 与生命周期；

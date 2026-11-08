@@ -40,6 +40,27 @@ impl fmt::Display for Expr {
                 }
                 write!(f, ")")
             }
+            Expr::FnRef(name) => write!(f, "{name}"),
+            Expr::Lambda { params, ret, body } => {
+                write!(f, "fn(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", p.name, p.ty)?;
+                }
+                write!(f, ") -> {ret} {{ {body} }}")
+            }
+            Expr::Apply { callee, args } => {
+                write!(f, "{callee}(")?;
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{a}")?;
+                }
+                write!(f, ")")
+            }
             Expr::Index(b, i) => write!(f, "{b}[{i}]"),
             Expr::Seq(a, b) => write!(f, "{a}; {b}"),
         }
@@ -79,6 +100,16 @@ impl fmt::Display for Ty {
             Ty::Unit => write!(f, "Unit"),
             Ty::Prop => write!(f, "Prop"),
             Ty::Array(t) => write!(f, "Array<{t}>"),
+            Ty::Fn(params, ret) => {
+                write!(f, "Fn(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{p}")?;
+                }
+                write!(f, ") -> {ret}")
+            }
         }
     }
 }

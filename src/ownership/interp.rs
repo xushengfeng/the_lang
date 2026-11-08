@@ -15,6 +15,21 @@ pub enum Value {
     Bool(bool),
     Unit,
     Array(Rc<RefCell<Vec<Value>>>),
+    Closure(Rc<Closure>),
+}
+
+#[derive(Clone, Debug)]
+pub enum Closure {
+    /// Anonymous function evaluated by the tree-walking interpreter.
+    Expr {
+        params: Vec<String>,
+        body: Expr,
+        env: HashMap<String, Value>,
+    },
+    /// Reference to a top-level function, resolved by name at call time.
+    Named(String),
+    /// Lifted anonymous function executed by the bytecode VM.
+    Bytecode { func: usize, captures: Vec<Value> },
 }
 
 impl Value {
@@ -56,6 +71,7 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            Value::Closure(_) => write!(f, "<fn>"),
         }
     }
 }
@@ -184,6 +200,20 @@ impl<'a> Interpreter<'a> {
                 self.eval(a, env)?;
                 self.eval(b, env)
             }
+            Expr::FnRef(name) => Ok(Value::Closure(Rc::new(Closure::Named(name.clone())))),
+            Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(Closure::Expr {
+                params: params.iter().map(|p| p.name.clone()).collect(),
+                body: (**body).clone(),
+                env: env.clone(),
+            }))),
+            Expr::Apply { callee, args } => {
+                let callee = self.eval(callee, env)?;
+                let mut values = Vec::with_capacity(args.len());
+                for arg in args {
+                    values.push(self.eval(arg, env)?);
+                }
+                self.apply(callee, values)
+            }
             Expr::Index(base, index) => {
                 let arr = self.eval(base, env)?.as_array()?;
                 let i = self.eval(index, env)?.as_int()?;
@@ -254,6 +284,36 @@ impl<'a> Interpreter<'a> {
                     }
                     _ => self.call(name, vals),
                 }
+            }
+        }
+    }
+
+    fn apply(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, String> {
+        let Value::Closure(closure) = callee else {
+            return Err("attempted to call a non-function value".into());
+        };
+        match closure.as_ref() {
+            Closure::Named(name) => self.call(name, args),
+            Closure::Expr {
+                params,
+                body,
+                env: captured,
+            } => {
+                if params.len() != args.len() {
+                    return Err(format!(
+                        "function value expects {} arguments, got {}",
+                        params.len(),
+                        args.len()
+                    ));
+                }
+                let mut env = captured.clone();
+                for (param, value) in params.iter().zip(args) {
+                    env.insert(param.clone(), value);
+                }
+                self.eval(body, &mut env)
+            }
+            Closure::Bytecode { .. } => {
+                Err("bytecode closure cannot run in the tree interpreter".into())
             }
         }
     }

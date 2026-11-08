@@ -57,8 +57,12 @@ pub(super) fn reify_expr(e: &Expr) -> Result<SpecExpr, String> {
             "get".into(),
             vec![reify_expr(a)?, reify_expr(i)?],
         )),
-        Expr::If(_, _, _) | Expr::Seq(_, _) => {
-            Err("if/seq bodies are not supported by the prototype refines checker".into())
+        Expr::If(_, _, _)
+        | Expr::Seq(_, _)
+        | Expr::FnRef(_)
+        | Expr::Lambda { .. }
+        | Expr::Apply { .. } => {
+            Err("if/seq/function bodies are not supported by the prototype refines checker".into())
         }
     }
 }

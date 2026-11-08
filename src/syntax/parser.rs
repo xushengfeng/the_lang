@@ -242,6 +242,23 @@ impl Parser {
                     self.expect(Tok::Gt)?;
                     Ok(Ty::Array(Box::new(inner)))
                 }
+                "Fn" => {
+                    self.expect(Tok::LParen)?;
+                    let mut params = Vec::new();
+                    if !self.eat(&Tok::RParen) {
+                        loop {
+                            params.push(self.parse_type()?);
+                            if self.eat(&Tok::Comma) {
+                                continue;
+                            }
+                            self.expect(Tok::RParen)?;
+                            break;
+                        }
+                    }
+                    self.expect(Tok::Arrow)?;
+                    let ret = self.parse_type()?;
+                    Ok(Ty::Fn(params, Box::new(ret)))
+                }
                 other => self.err(format!("unknown type `{other}`")),
             },
             Tok::LParen => {
@@ -419,12 +436,90 @@ impl Parser {
 
     fn parse_postfix(&mut self) -> Result<Expr, ParseError> {
         let mut e = self.parse_atom()?;
-        while self.eat(&Tok::LBracket) {
-            let idx = self.parse_expr()?;
-            self.expect(Tok::RBracket)?;
-            e = Expr::Index(Box::new(e), Box::new(idx));
+        loop {
+            if self.eat(&Tok::LBracket) {
+                let idx = self.parse_expr()?;
+                self.expect(Tok::RBracket)?;
+                e = Expr::Index(Box::new(e), Box::new(idx));
+                continue;
+            }
+            if self.eat(&Tok::LParen) {
+                let mut args = Vec::new();
+                if !self.eat(&Tok::RParen) {
+                    loop {
+                        let arg = if self.eat(&Tok::By) {
+                            CallArg::Proof(self.parse_proof_block()?)
+                        } else {
+                            CallArg::Expr(self.parse_expr()?)
+                        };
+                        args.push(arg);
+                        if self.eat(&Tok::Comma) {
+                            continue;
+                        }
+                        self.expect(Tok::RParen)?;
+                        break;
+                    }
+                }
+                e = match e {
+                    Expr::Var(name) => Expr::Call { name, args },
+                    callee => {
+                        let mut exprs = Vec::with_capacity(args.len());
+                        for arg in args {
+                            match arg {
+                                CallArg::Expr(e) => exprs.push(e),
+                                CallArg::Proof(_) => {
+                                    return Err(ParseError::new(
+                                        "proof arguments require a named function call",
+                                        self.toks[self.pos.saturating_sub(1)].line,
+                                        self.toks[self.pos.saturating_sub(1)].col,
+                                    ))
+                                }
+                            }
+                        }
+                        Expr::Apply {
+                            callee: Box::new(callee),
+                            args: exprs,
+                        }
+                    }
+                };
+                continue;
+            }
+            break;
         }
         Ok(e)
+    }
+
+    fn parse_lambda(&mut self) -> Result<Expr, ParseError> {
+        self.expect(Tok::LParen)?;
+        let mut params = Vec::new();
+        if !self.eat(&Tok::RParen) {
+            loop {
+                let name = self.ident()?;
+                self.expect(Tok::Colon)?;
+                let ty = self.parse_type()?;
+                params.push(LambdaParam { name, ty });
+                if self.eat(&Tok::Comma) {
+                    continue;
+                }
+                self.expect(Tok::RParen)?;
+                break;
+            }
+        }
+        self.expect(Tok::Arrow)?;
+        let ret = self.parse_type()?;
+        let body = if self.eat(&Tok::LBrace) {
+            let body = self.parse_expr_seq()?;
+            self.expect(Tok::RBrace)?;
+            body
+        } else {
+            self.expect(Tok::Eq)?;
+            self.parse_expr()?
+        };
+        Ok(Expr::Lambda {
+            params,
+            ret,
+            body: Box::new(body),
+        })
     }
 
     fn parse_atom(&mut self) -> Result<Expr, ParseError> {
@@ -432,29 +527,8 @@ impl Parser {
             Tok::Int(n) => Ok(Expr::Int(n)),
             Tok::True => Ok(Expr::Bool(true)),
             Tok::False => Ok(Expr::Bool(false)),
-            Tok::Ident(name) => {
-                if self.eat(&Tok::LParen) {
-                    let mut args = Vec::new();
-                    if !self.eat(&Tok::RParen) {
-                        loop {
-                            let arg = if self.eat(&Tok::By) {
-                                CallArg::Proof(self.parse_proof_block()?)
-                            } else {
-                                CallArg::Expr(self.parse_expr()?)
-                            };
-                            args.push(arg);
-                            if self.eat(&Tok::Comma) {
-                                continue;
-                            }
-                            self.expect(Tok::RParen)?;
-                            break;
-                        }
-                    }
-                    Ok(Expr::Call { name, args })
-                } else {
-                    Ok(Expr::Var(name))
-                }
-            }
+            Tok::Ident(name) => Ok(Expr::Var(name)),
+            Tok::Fn => self.parse_lambda(),
             Tok::LParen => {
                 if self.eat(&Tok::RParen) {
                     Ok(Expr::Unit)

@@ -526,6 +526,35 @@ fn higher_order_lambda_apply() {
 }
 
 #[test]
+fn surface_callback_lambda() {
+    let src = r#"
+        fn call_with(f: Fn(Int) -> Int, x: Int) -> Int { f(x) }
+        fn main() -> Int {
+          let g = fn(y: Int) -> Int { y };
+          call_with(g, 7)
+        }
+    "#;
+    let prog = check_source(src).unwrap();
+    let mem = plan_checked_program(&prog).unwrap();
+    let result = run_program(&mem, "main").unwrap();
+    assert_eq!(result.value, MemValue::Int(7));
+    assert!(result.stats().closures >= 1);
+}
+
+#[test]
+fn surface_callback_named_function() {
+    let src = r#"
+        fn id(x: Int) -> Int { x }
+        fn call_with(f: Fn(Int) -> Int, x: Int) -> Int { f(x) }
+        fn main() -> Int { call_with(id, 7) }
+    "#;
+    let prog = check_source(src).unwrap();
+    let mem = plan_checked_program(&prog).unwrap();
+    let result = run_program(&mem, "main").unwrap();
+    assert_eq!(result.value, MemValue::Int(7));
+}
+
+#[test]
 fn validator_rejects_unknown_var() {
     let program = MemProgram::default();
     assert_eq!(

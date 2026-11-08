@@ -33,3 +33,6 @@ jobs:
           cargo run --quiet --bin region_demo
           cargo run --quiet --bin mem_plan_demo
           cargo run --quiet --bin surface_mem_demo
+          cargo run --quiet --bin ownership_demo -- examples/callbacks.alt
+          cargo run --quiet --bin ownership_demo -- examples/callbacks.lisp
+          cargo run --quiet --bin vm_demo -- examples/callbacks.alt

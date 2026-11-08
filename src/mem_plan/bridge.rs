@@ -160,8 +160,9 @@ fn data_matches_ty(value: &MemValue, ty: &Ty) -> bool {
 }
 
 pub(crate) fn value_matches_ty(value: &Value, ty: &Ty) -> bool {
-    match value {
-        Value::Data(value) => data_matches_ty(value, ty),
+    match (value, ty) {
+        (Value::Data(value), ty) => data_matches_ty(value, ty),
+        (Value::Closure(_), Ty::Fn(..)) => true,
         _ => false,
     }
 }
@@ -193,6 +194,15 @@ fn lower_expr(expr: &Expr) -> Result<MemExpr, BridgeError> {
             index: const_index(index)?,
         }),
         Expr::Call { name, args } => lower_call(name, args),
+        Expr::FnRef(name) => Ok(MemExpr::FnRef(name.clone())),
+        Expr::Lambda { params, body, .. } => Ok(MemExpr::Lambda {
+            params: params.iter().map(|p| p.name.clone()).collect(),
+            body: Box::new(lower_expr(body)?),
+        }),
+        Expr::Apply { callee, args } => Ok(MemExpr::Apply {
+            callee: Box::new(lower_expr(callee)?),
+            args: args.iter().map(lower_expr).collect::<Result<Vec<_>, _>>()?,
+        }),
         Expr::If(cond, then_branch, else_branch) => Ok(MemExpr::If {
             cond: Box::new(lower_expr(cond)?),
             then_branch: Box::new(lower_expr(then_branch)?),

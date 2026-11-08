@@ -165,6 +165,60 @@ fn step(
             }
             st.stack.push(target.ret.clone());
         }
+        Instr::MakeClosure { func: f, captures } => {
+            let target = prog
+                .funcs
+                .get(*f)
+                .ok_or_else(|| format!("pc {pc}: closure of invalid function {f}"))?;
+            if *captures > target.param_tys.len() {
+                return Err(format!(
+                    "pc {pc}: closure captures {captures} values, `{}` has {} parameters",
+                    target.name,
+                    target.param_tys.len()
+                ));
+            }
+            let mut actual = Vec::with_capacity(*captures);
+            for _ in 0..*captures {
+                actual.push(pop_any(&mut st.stack, pc)?);
+            }
+            actual.reverse();
+            for (i, (got, expected)) in actual.iter().zip(&target.param_tys).enumerate() {
+                if got != expected {
+                    return Err(format!(
+                        "pc {pc}: capture {i} has type {got:?}, expected {expected:?}"
+                    ));
+                }
+            }
+            st.stack.push(BType::Fn(
+                target.param_tys[*captures..].to_vec(),
+                Box::new(target.ret.clone()),
+            ));
+        }
+        Instr::CallClosure { argc } => {
+            let mut args = Vec::with_capacity(*argc);
+            for _ in 0..*argc {
+                args.push(pop_any(&mut st.stack, pc)?);
+            }
+            args.reverse();
+            let callee = pop_any(&mut st.stack, pc)?;
+            let BType::Fn(params, ret) = callee else {
+                return Err(format!("pc {pc}: call of non-function value {callee:?}"));
+            };
+            if *argc != params.len() {
+                return Err(format!(
+                    "pc {pc}: closure expects {} arguments, got {argc}",
+                    params.len()
+                ));
+            }
+            for (i, (actual, expected)) in args.iter().zip(&params).enumerate() {
+                if actual != expected {
+                    return Err(format!(
+                        "pc {pc}: closure argument {i} has type {actual:?}, expected {expected:?}"
+                    ));
+                }
+            }
+            st.stack.push(*ret);
+        }
         Instr::Ret => {
             if st.stack.len() != 1 {
                 return Err(format!(
