@@ -107,12 +107,12 @@ canonical pipeline 的一层实现，不能三处同时长。
 
 | 模块 | 职责 |
 |---|---|
-| `src/dependent.rs` | 依赖类型内核、定义等价、证明检查 |
+| `src/dependent.rs` | 内核模块入口；`dependent/term.rs`、`debruijn.rs`、`env.rs`、`check.rs` |
 | `src/syntax.rs` | 表面语法模块入口；`syntax/ast.rs`、`syntax/lexer.rs`、`syntax/parser.rs`、`syntax/pretty.rs` |
 | `src/ownership.rs` | 所有权模块入口；`ownership/types.rs`、`ownership/checker.rs`、`ownership/interp.rs` |
 | `src/refines.rs` | `spec`/`impl`/`refines` 原型 |
 | `src/refines_proof.rs` | refines 的内核证书映射 |
-| `src/ownership_proof.rs` | 所有权/借用模型的内核证明 |
+| `src/ownership_proof.rs` | 所有权模型证明入口；`two_pos.rs`、`nat.rs`、`borrow.rs`、`common.rs` |
 | `src/region.rs` | 区域堆模块入口；`region/heap.rs` 分配/释放/观察；`region/types.rs` 类型 |
 | `src/mem_plan/ir.rs` | `SrcExpr`、`MemExpr`、`MemFn`、`MemProgram` |
 | `src/mem_plan/planner.rs` | move/downgrade/copy、原地/复制选择 |
@@ -130,7 +130,8 @@ canonical pipeline 的一层实现，不能三处同时长。
 - MemIR 有静态验证器；`run_program_in` 执行前验证；
 - 核心模块已拆分：`mem_plan`（ir/planner/eval/bridge/validate）、`region`
   （heap/types）、`vm`（ir/compile/verify/run）、`syntax`（ast/lexer/parser/pretty）、
-  `ownership`（types/checker/interp）；`src/*.rs` 只保留模块入口和 re-export；
+  `ownership`（types/checker/interp）、`dependent`（term/debruijn/env/check）、
+  `ownership_proof`（common/two_pos/nat/borrow）；`src/*.rs` 只保留模块入口和 re-export；
 - `tests/` 覆盖区域堆和 surface → MemIR → 区域执行；
 - 文档以 `docs/18-region-memory.md` 为内存路线，本文为 pipeline 路线。
 
