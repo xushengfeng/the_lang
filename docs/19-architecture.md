@@ -108,19 +108,19 @@ canonical pipeline 的一层实现，不能三处同时长。
 | 模块 | 职责 |
 |---|---|
 | `src/dependent.rs` | 依赖类型内核、定义等价、证明检查 |
-| `src/syntax.rs` | 表面语法/parser 原型 |
-| `src/ownership.rs` | `own`/`borrow`/unique 检查、`set`/`push` lowering、旧解释器 |
+| `src/syntax.rs` | 表面语法模块入口；`syntax/ast.rs`、`syntax/lexer.rs`、`syntax/parser.rs`、`syntax/pretty.rs` |
+| `src/ownership.rs` | 所有权模块入口；`ownership/types.rs`、`ownership/checker.rs`、`ownership/interp.rs` |
 | `src/refines.rs` | `spec`/`impl`/`refines` 原型 |
 | `src/refines_proof.rs` | refines 的内核证书映射 |
 | `src/ownership_proof.rs` | 所有权/借用模型的内核证明 |
-| `src/region.rs` | 区域堆、观察等价、统计 |
+| `src/region.rs` | 区域堆模块入口；`region/heap.rs` 分配/释放/观察；`region/types.rs` 类型 |
 | `src/mem_plan/ir.rs` | `SrcExpr`、`MemExpr`、`MemFn`、`MemProgram` |
 | `src/mem_plan/planner.rs` | move/downgrade/copy、原地/复制选择 |
 | `src/mem_plan/eval.rs` | MemIR 求值、区域、闭包/thunk |
 | `src/mem_plan/bridge.rs` | checked surface → MemIR、运行入口 |
 | `src/mem_plan/validate.rs` | MemIR scope/type/arity 验证 |
 | `src/mem_plan/tests.rs` | MemIR 单元测试 |
-| `src/vm.rs` | 字节码、验证器、参考 VM |
+| `src/vm.rs` | 字节码模块入口；`vm/ir.rs`、`vm/compile.rs`、`vm/verify.rs`、`vm/run.rs` |
 | `tests/` | 公开 API 集成测试 |
 
 ## 6. 当前状态
@@ -128,7 +128,9 @@ canonical pipeline 的一层实现，不能三处同时长。
 - `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`
   已纳入 CI；
 - MemIR 有静态验证器；`run_program_in` 执行前验证；
-- `src/mem_plan.rs` 只保留模块声明和 re-export，实现拆到子模块；
+- 核心模块已拆分：`mem_plan`（ir/planner/eval/bridge/validate）、`region`
+  （heap/types）、`vm`（ir/compile/verify/run）、`syntax`（ast/lexer/parser/pretty）、
+  `ownership`（types/checker/interp）；`src/*.rs` 只保留模块入口和 re-export；
 - `tests/` 覆盖区域堆和 surface → MemIR → 区域执行；
 - 文档以 `docs/18-region-memory.md` 为内存路线，本文为 pipeline 路线。
 

@@ -55,11 +55,20 @@ cargo run --bin alethe -- examples/checks.alt
 |---|---|
 | `src/dependent.rs` | 类 Lean 小内核：de Bruijn 项、`Prop`/`Type`、`Nat`/`List`/`Eq`、recursor、类型检查、定义等价 |
 | `src/bin/sum_demo.rs` | 内核 demo：`sum_ref` / `sum_fast` / `sum_fast_eq` |
-| `src/ownership.rs` | `own` / `borrow` / unique 检查器 + 原地 lowering + 解释器 |
+| `src/ownership.rs` | 所有权模块入口：re-export `types`/`checker`/`interp` |
+| `src/ownership/types.rs` | `ParamSig`、`FnSig`、`CheckedFn`、`CheckedProgram` |
+| `src/ownership/checker.rs` | `own`/`borrow`/unique 检查与 `set`/`push` lowering |
+| `src/ownership/interp.rs` | 旧树遍历解释器 |
 | `src/bin/ownership_demo.rs` | 所有权 demo CLI |
-| `src/vm.rs` | 字节码定义、编译器、栈式 VM |
+| `src/vm.rs` | 字节码模块入口：re-export `ir`/`compile`/`verify`/`run` |
+| `src/vm/ir.rs` | `Instr`、`BType`、`BcFunction`、`BcProgram` |
+| `src/vm/compile.rs` | checked surface → 字节码 |
+| `src/vm/verify.rs` | 栈/局部/跳转/调用/数组验证 |
+| `src/vm/run.rs` | 参考 VM 执行与反汇编 |
 | `src/bin/vm_demo.rs` | VM demo CLI |
-| `src/region.rs` | 区域堆模型：分配、原地/复制更新、区域释放、观察等价 |
+| `src/region.rs` | 区域堆模块入口：re-export `heap`/`types` |
+| `src/region/heap.rs` | `RegionHeap`：分配、原地/复制、区域释放、观察 |
+| `src/region/types.rs` | `RegionId`/`Loc`/`MemValue`/`MemError`/`MemStats`/`Observation` |
 | `src/bin/region_demo.rs` | 区域内存 demo CLI |
 | `src/mem_plan.rs` | MemIR 模块入口：re-export `ir`/`planner`/`eval`/`bridge`/`validate` |
 | `src/mem_plan/ir.rs` | `SrcExpr`、`MemExpr`、`MemFn`、`MemProgram` |
@@ -70,7 +79,11 @@ cargo run --bin alethe -- examples/checks.alt
 | `src/bin/mem_plan_demo.rs` | 内存规划 demo CLI |
 | `src/bin/surface_mem_demo.rs` | checked surface 函数到区域堆的 demo CLI |
 | `examples/ownership.alt` | 所有权/VM 示例 |
-| `src/syntax.rs` | 早期精化类型表面语法原型（独立实验） |
+| `src/syntax.rs` | 表面语法模块入口：re-export `ast`/`lexer`/`parser`/`pretty` |
+| `src/syntax/ast.rs` | 表面 AST：`Decl`、`FnDecl`、`Ty`、`Expr`、`PExpr` |
+| `src/syntax/lexer.rs` | 词法分析 |
+| `src/syntax/parser.rs` | parser |
+| `src/syntax/pretty.rs` | AST pretty printing |
 | `src/main.rs` | 表面语法原型 CLI |
 | `docs/` | 设计、验证风格、内核、类型/运行时、AI 优化、硬件无关、可行性、路线图 |
 
@@ -151,6 +164,7 @@ cargo run --bin alethe -- examples/checks.alt
 - MemIR 静态验证器：scope、类型、调用 arity、if 分支类型；`run_program_in` 执行前验证；
 - 工程收口：`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --all-targets` 和 demo smoke 已进 CI；
 - `src/mem_plan` 拆成 `ir`/`planner`/`eval`/`bridge`/`validate`，并有 `tests/` 集成测试；
+- 核心模块拆分：`region`（heap/types）、`vm`（ir/compile/verify/run）、`syntax`（ast/lexer/parser/pretty）、`ownership`（types/checker/interp）；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
 - 栈式 VM：`source → ownership check/lowering → bytecode → verify → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
 - 字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组操作；错误字节码被拒绝；
