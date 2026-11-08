@@ -177,6 +177,7 @@ proof nat_refl:
 19. [架构与信任边界](docs/19-architecture.md)
 20. [决策记录与开放问题](docs/09-decisions.md)
 21. [表面语法：缩进语法与 S-expression](docs/20-surface-syntax.md)
+22. [语言方向与设想（草案）](docs/21-future-directions.md)
 
 ## 模型优先
 
