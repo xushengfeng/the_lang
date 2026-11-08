@@ -180,7 +180,9 @@ impl<'a> Compiler<'a> {
                     Box::new(BType::from_ty(&target.ret)?),
                 ))
             }
-            Expr::Lambda { params, ret, body } => self.emit_lambda(params, ret, body),
+            Expr::Lambda {
+                params, ret, body, ..
+            } => self.emit_lambda(params, ret, body),
             Expr::Apply { callee, args } => {
                 let callee_ty = self.emit(callee)?;
                 let (param_tys, ret) = match callee_ty {

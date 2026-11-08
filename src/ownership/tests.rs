@@ -100,14 +100,66 @@ fn callbacks_and_closures_run() {
 }
 
 #[test]
-fn rejects_lambda_capturing_borrow() {
+fn allows_local_borrow_capture() {
+    let src = r#"
+        fn first(borrow a: Array<Int>) -> Int {
+          let get = fn(i: Int) -> Int { a[i] };
+          get(0)
+        }
+        fn main() -> Int {
+          let a = [4, 5, 6];
+          first(a)
+        }
+    "#;
+    let prog = check_source(src).unwrap();
+    let r = run(&prog, "main").unwrap();
+    assert_eq!(r.value.to_string(), "4");
+}
+
+#[test]
+fn rejects_returning_borrow_closure() {
     let src = r#"
         fn bad(borrow a: Array<Int>) -> Fn(Int) -> Int {
           fn(i: Int) -> Int { a[i] }
         }
     "#;
     let err = check_source(src).unwrap_err();
-    assert!(err.contains("may not capture borrow"), "{err}");
+    assert!(err.contains("escapes"), "{err}");
+}
+
+#[test]
+fn rejects_storing_borrow_closure() {
+    let src = r#"
+        fn bad(borrow a: Array<Int>) -> Array<Fn(Int) -> Int> {
+          [fn(i: Int) -> Int { a[i] }]
+        }
+    "#;
+    let err = check_source(src).unwrap_err();
+    assert!(err.contains("stored in an array"), "{err}");
+}
+
+#[test]
+fn rejects_passing_borrow_closure() {
+    let src = r#"
+        fn call(f: Fn(Int) -> Int, x: Int) -> Int { f(x) }
+        fn bad(borrow a: Array<Int>) -> Int {
+          call(fn(i: Int) -> Int { a[i] }, 0)
+        }
+    "#;
+    let err = check_source(src).unwrap_err();
+    assert!(err.contains("capturing a borrow"), "{err}");
+}
+
+#[test]
+fn rejects_lambda_returning_borrow() {
+    let src = r#"
+        fn bad(borrow a: Array<Int>) -> Int {
+          let leak = fn(i: Int) -> Array<Int> { a };
+          leak(0)[0]
+        }
+    "#;
+    let err = check_source(src).unwrap_err();
+    assert!(err.contains("lambda returns borrow"), "{err}");
 }
 
 #[test]

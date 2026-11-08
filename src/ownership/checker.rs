@@ -46,6 +46,7 @@ fn function_ty(sig: &FnSig) -> Ty {
             .map(|p| p.ty.clone())
             .collect(),
         Box::new(sig.ret.clone()),
+        Vec::new(),
     )
 }
 
@@ -230,6 +231,12 @@ impl Checker {
                 f.name, ty, f.ret
             ));
         }
+        if ty.captures_borrow() {
+            return Err(format!(
+                "function `{}`: a closure capturing a borrow escapes through the result",
+                f.name
+            ));
+        }
 
         // A borrow may not escape through the result.
         if let Some(name) = result_borrow(&body, &f.ret, &ctx.borrow_names) {
@@ -289,7 +296,9 @@ impl Checker {
                     .ok_or_else(|| format!("unknown function `{name}`"))?;
                 Ok((function_ty(sig), Expr::FnRef(name.clone())))
             }
-            Expr::Lambda { params, ret, body } => self.check_lambda(ctx, params, ret, body),
+            Expr::Lambda {
+                params, ret, body, ..
+            } => self.check_lambda(ctx, params, ret, body),
             Expr::Apply { callee, args } => self.check_apply(ctx, callee, args),
             Expr::Int(n) => Ok((Ty::Int, Expr::Int(*n))),
             Expr::Bool(b) => Ok((Ty::Bool, Expr::Bool(*b))),
@@ -299,6 +308,11 @@ impl Checker {
                 let mut elem_ty: Option<Ty> = None;
                 for item in items {
                     let (t, c) = self.check_expr(ctx, item)?;
+                    if t.captures_borrow() {
+                        return Err(
+                            "a closure capturing a borrow cannot be stored in an array".into()
+                        );
+                    }
                     if let Some(expected) = &elem_ty {
                         if *expected != t {
                             return Err(format!(
@@ -384,7 +398,8 @@ impl Checker {
                 ctx.borrow_names.extend(then_ctx.borrow_names);
                 ctx.borrow_names.extend(else_ctx.borrow_names);
 
-                Ok((tt, Expr::If(Box::new(cc), Box::new(tc), Box::new(ec))))
+                let merged = tt.merge_captures(&et);
+                Ok((merged, Expr::If(Box::new(cc), Box::new(tc), Box::new(ec))))
             }
             Expr::Let(name, value, body) => {
                 if ctx.vars.contains_key(name) {
@@ -492,6 +507,9 @@ impl Checker {
                 if val_t != elem {
                     return Err(format!("set value has type `{val_t}`, expected `{elem}`"));
                 }
+                if val_t.captures_borrow() {
+                    return Err("set stores a closure capturing a borrow".into());
+                }
                 if let Some(b) = result_borrow(&val_c, &elem, &ctx.borrow_names) {
                     return Err(format!("set stores borrow `{b}`"));
                 }
@@ -525,6 +543,9 @@ impl Checker {
                 let (val_t, val_c) = self.nth_expr_arg(ctx, args, 1, "push")?;
                 if val_t != elem {
                     return Err(format!("push value has type `{val_t}`, expected `{elem}`"));
+                }
+                if val_t.captures_borrow() {
+                    return Err("push stores a closure capturing a borrow".into());
                 }
                 if let Some(b) = result_borrow(&val_c, &elem, &ctx.borrow_names) {
                     return Err(format!("push stores borrow `{b}`"));
@@ -593,6 +614,12 @@ impl Checker {
                             p.name, p.ty
                         ));
                     }
+                    if at.captures_borrow() {
+                        return Err(format!(
+                            "argument `{}` of `{name}` is a closure capturing a borrow; call it directly or keep it in this function",
+                            p.name
+                        ));
+                    }
                     match p.mode {
                         Mode::Own => transfer_arg(ctx, arg, &p.name, name)?,
                         Mode::Borrow => borrow_arg(ctx, arg, &p.name, name)?,
@@ -644,26 +671,37 @@ impl Checker {
         let free = lambda_free_vars(body, &names);
         let mut inner = ctx.clone();
         let mut captures = Vec::new();
+        let mut borrowed_captures = Vec::new();
         for name in &free {
             let Some(info) = ctx.vars.get(name).cloned() else {
                 continue;
             };
+            captures.push(name.clone());
             if info.mode == Mode::Borrow {
-                return Err(format!(
-                    "lambda may not capture borrow `{name}`; pass it as a parameter"
-                ));
+                borrowed_captures.push(name.clone());
             }
+            // A captured function value may itself capture borrows; carrying
+            // those through makes the new closure transitively non-escaping.
+            for borrow in info.ty.borrow_captures() {
+                if !borrowed_captures.contains(borrow) {
+                    borrowed_captures.push(borrow.clone());
+                }
+            }
+
             // Captured values are read-only inside a closure: the closure may
             // be called more than once, so it may not move or mutate them.
+            // Borrow captures keep borrow mode so the body cannot store or
+            // return the borrowed array.
             let entry = inner
                 .vars
                 .get_mut(name)
                 .expect("captured variable present in cloned context");
             entry.unique = false;
-            entry.mode = Mode::Val;
             entry.consumed = false;
-            inner.borrow_names.remove(name);
-            captures.push(name.clone());
+            if info.mode != Mode::Borrow {
+                entry.mode = Mode::Val;
+                inner.borrow_names.remove(name);
+            }
         }
 
         for p in params {
@@ -683,6 +721,14 @@ impl Checker {
         if body_ty != *ret {
             return Err(format!("lambda returns `{body_ty}`, expected `{ret}`"));
         }
+        if body_ty.captures_borrow() {
+            return Err("lambda returns a closure capturing a borrow, which would escape".into());
+        }
+        if let Some(name) = result_borrow(&body, ret, &inner.borrow_names) {
+            return Err(format!(
+                "lambda returns borrow `{name}`, which would escape"
+            ));
+        }
         for name in &captures {
             if inner.vars.get(name).map(|i| i.consumed).unwrap_or(false) {
                 return Err(format!("lambda may not consume captured value `{name}`"));
@@ -695,6 +741,7 @@ impl Checker {
         let ty = Ty::Fn(
             params.iter().map(|p| p.ty.clone()).collect(),
             Box::new(ret.clone()),
+            borrowed_captures,
         );
         Ok((
             ty,
@@ -702,6 +749,7 @@ impl Checker {
                 params: params.to_vec(),
                 ret: ret.clone(),
                 body: Box::new(body),
+                captures,
             },
         ))
     }
@@ -714,7 +762,7 @@ impl Checker {
     ) -> Result<(Ty, Expr), String> {
         let (callee_ty, callee) = self.check_expr(ctx, callee)?;
         let (param_tys, ret) = match callee_ty {
-            Ty::Fn(params, ret) => (params, *ret),
+            Ty::Fn(params, ret, _) => (params, *ret),
             other => return Err(format!("cannot call value of type `{other}`")),
         };
         if args.len() != param_tys.len() {
@@ -731,6 +779,12 @@ impl Checker {
                 return Err(format!(
                     "function argument has type `{ty}`, expected `{expected}`"
                 ));
+            }
+            if ty.captures_borrow() {
+                return Err(
+                    "a closure capturing a borrow cannot be passed as an argument; call it directly"
+                        .into(),
+                );
             }
             checked.push(expr);
         }

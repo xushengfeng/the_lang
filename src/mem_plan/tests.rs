@@ -462,6 +462,7 @@ fn lambda_identity_apply() {
         callee: Box::new(MemExpr::Lambda {
             params: vec!["x".into()],
             body: Box::new(MemExpr::Var("x".into())),
+            captures: vec![],
         }),
         args: vec![MemExpr::Int(7)],
     };
@@ -480,6 +481,7 @@ fn lambda_captures_the_environment() {
             callee: Box::new(MemExpr::Lambda {
                 params: vec![],
                 body: Box::new(MemExpr::Var("n".into())),
+                captures: vec!["n".into()],
             }),
             args: vec![],
         }),
@@ -507,6 +509,7 @@ fn higher_order_lambda_apply() {
         value: Box::new(MemExpr::Lambda {
             params: vec!["x".into()],
             body: Box::new(MemExpr::Var("x".into())),
+            captures: vec![],
         }),
         body: Box::new(MemExpr::Apply {
             callee: Box::new(MemExpr::Lambda {
@@ -515,6 +518,7 @@ fn higher_order_lambda_apply() {
                     callee: Box::new(MemExpr::Var("f".into())),
                     args: vec![MemExpr::Int(7)],
                 }),
+                captures: vec![],
             }),
             args: vec![MemExpr::Var("id".into())],
         }),
@@ -552,6 +556,45 @@ fn surface_callback_named_function() {
     let mem = plan_checked_program(&prog).unwrap();
     let result = run_program(&mem, "main").unwrap();
     assert_eq!(result.value, MemValue::Int(7));
+}
+
+#[test]
+fn surface_borrow_callback_stays_in_caller() {
+    let src = r#"
+        fn first(borrow a: Array<Int>) -> Int {
+          let get = fn(i: Int) -> Int { a[0] };
+          get(0)
+        }
+        fn main() -> Int {
+          let a = [7, 8, 9];
+          first(a)
+        }
+    "#;
+    let prog = check_source(src).unwrap();
+    let mem = plan_checked_program(&prog).unwrap();
+    let first = mem.get("first").unwrap();
+    let MemExpr::Let { value, .. } = &first.body else {
+        panic!("expected a let-bound callback");
+    };
+    let MemExpr::Lambda { captures, .. } = value.as_ref() else {
+        panic!("expected a lambda");
+    };
+    assert_eq!(captures, &vec!["a".to_string()]);
+    let result = run_program(&mem, "main").unwrap();
+    assert_eq!(result.value, MemValue::Int(7));
+}
+
+#[test]
+fn validator_rejects_unknown_lambda_capture() {
+    let expr = MemExpr::Lambda {
+        params: vec!["x".into()],
+        body: Box::new(MemExpr::Var("x".into())),
+        captures: vec!["missing".into()],
+    };
+    assert_eq!(
+        validate_expr(&expr, &MemProgram::default()),
+        Err(ValidateError::UnknownVar("missing".into()))
+    );
 }
 
 #[test]

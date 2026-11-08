@@ -166,7 +166,7 @@ fn ty_to_mem(ty: &Ty) -> MemType {
         Ty::Bool => MemType::Bool,
         Ty::Unit => MemType::Unit,
         Ty::Array(_) => MemType::Array,
-        Ty::Fn(params, ret) => MemType::Fun(
+        Ty::Fn(params, ret, _) => MemType::Fun(
             params.iter().map(ty_to_mem).collect(),
             Box::new(ty_to_mem(ret)),
         ),
@@ -214,10 +214,21 @@ fn infer(
                 Box::new(ty_to_mem(&f.ret)),
             ))
         }
-        MemExpr::Lambda { params, body } => {
+        MemExpr::Lambda {
+            params,
+            body,
+            captures,
+        } => {
             let mut inner = env.clone();
+            for capture in captures {
+                if !env.contains_key(capture) {
+                    return Err(ValidateError::UnknownVar(capture.clone()));
+                }
+            }
             for param in params {
-                inner.insert(param.clone(), MemType::Unknown);
+                if inner.insert(param.clone(), MemType::Unknown).is_some() {
+                    return Err(ValidateError::DuplicateParam(param.clone()));
+                }
             }
             let body_ty = infer(body, prog, &inner)?;
             Ok(MemType::Fun(

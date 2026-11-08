@@ -552,7 +552,7 @@ fn lower_ty(form: &Sexp) -> Result<Ty, ParseError> {
                         .iter()
                         .map(lower_ty)
                         .collect::<Result<Vec<_>, _>>()?;
-                    Ok(Ty::Fn(params, Box::new(lower_ty(&items[2])?)))
+                    Ok(Ty::Fn(params, Box::new(lower_ty(&items[2])?), Vec::new()))
                 }
                 other => err(form, format!("unknown type constructor `{other}`")),
             }
@@ -652,6 +652,7 @@ fn lower_expr(form: &Sexp) -> Result<Expr, ParseError> {
                         params,
                         ret,
                         body: Box::new(body),
+                        captures: Vec::new(),
                     })
                 }
                 "apply" => {

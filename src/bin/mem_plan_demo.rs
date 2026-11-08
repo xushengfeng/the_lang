@@ -95,6 +95,7 @@ fn main() {
     let identity = MemExpr::Lambda {
         params: vec!["x".into()],
         body: Box::new(MemExpr::Var("x".into())),
+        captures: vec![],
     };
     let apply = MemExpr::Apply {
         callee: Box::new(identity),

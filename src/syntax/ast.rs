@@ -83,15 +83,73 @@ pub enum ParamKind {
     Proof(PExpr),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Ty {
     Int,
     Bool,
     Unit,
     Array(Box<Ty>),
     /// Runtime function value: `Fn(T1, T2) -> R`.
-    Fn(Vec<Ty>, Box<Ty>),
+    ///
+    /// The third component is a checker-only capture set: names of borrows
+    /// captured by a closure value.  It is ignored by type equality, so a
+    /// closure with borrow captures still has the same surface function type;
+    /// escape checks inspect it explicitly.
+    Fn(Vec<Ty>, Box<Ty>, Vec<String>),
     Prop,
+}
+
+impl PartialEq for Ty {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Ty::Int, Ty::Int)
+            | (Ty::Bool, Ty::Bool)
+            | (Ty::Unit, Ty::Unit)
+            | (Ty::Prop, Ty::Prop) => true,
+            (Ty::Array(a), Ty::Array(b)) => a == b,
+            (Ty::Fn(pa, ra, _), Ty::Fn(pb, rb, _)) => pa == pb && ra == rb,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Ty {}
+
+impl Ty {
+    /// Borrows captured by a closure value, or by a closure nested in an
+    /// array element type.
+    pub fn borrow_captures(&self) -> &[String] {
+        match self {
+            Ty::Fn(_, _, captures) => captures,
+            _ => &[],
+        }
+    }
+
+    pub fn captures_borrow(&self) -> bool {
+        match self {
+            Ty::Array(t) => t.captures_borrow(),
+            Ty::Fn(_, _, captures) => !captures.is_empty(),
+            _ => false,
+        }
+    }
+
+    /// Merge checker-only capture sets when both branches of an `if` have the
+    /// same surface type.
+    pub fn merge_captures(&self, other: &Ty) -> Ty {
+        match (self, other) {
+            (Ty::Array(a), Ty::Array(b)) => Ty::Array(Box::new(a.merge_captures(b))),
+            (Ty::Fn(pa, ra, ca), Ty::Fn(_, _, cb)) => {
+                let mut captures = ca.clone();
+                for c in cb {
+                    if !captures.contains(c) {
+                        captures.push(c.clone());
+                    }
+                }
+                Ty::Fn(pa.clone(), ra.clone(), captures)
+            }
+            _ => self.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -129,6 +187,8 @@ pub enum Expr {
         params: Vec<LambdaParam>,
         ret: Ty,
         body: Box<Expr>,
+        /// Captured outer variables, filled in by the ownership checker.
+        captures: Vec<String>,
     },
     /// Apply a function value (not a statically known function name).
     Apply {

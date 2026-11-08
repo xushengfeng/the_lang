@@ -258,7 +258,7 @@ impl Parser {
                     }
                     self.expect(Tok::Arrow)?;
                     let ret = self.parse_type()?;
-                    Ok(Ty::Fn(params, Box::new(ret)))
+                    Ok(Ty::Fn(params, Box::new(ret), Vec::new()))
                 }
                 other => self.err(format!("unknown type `{other}`")),
             },
@@ -636,6 +636,7 @@ impl Parser {
             params,
             ret,
             body: Box::new(body),
+            captures: Vec::new(),
         })
     }
 

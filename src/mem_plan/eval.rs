@@ -182,7 +182,16 @@ pub(crate) fn eval(
                 env: HashMap::new(),
             })))
         }
-        MemExpr::Lambda { params, body } => {
+        MemExpr::Lambda {
+            params,
+            body,
+            captures,
+        } => {
+            for name in captures {
+                if !env.contains_key(name) {
+                    return Err(EvalError::UnknownVar(name.clone()));
+                }
+            }
             heap.record_closures(1);
             Ok(Value::Closure(Rc::new(Closure {
                 params: params.clone(),

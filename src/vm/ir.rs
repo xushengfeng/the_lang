@@ -72,7 +72,7 @@ impl BType {
             crate::syntax::Ty::Bool => Ok(BType::Bool),
             crate::syntax::Ty::Unit => Ok(BType::Unit),
             crate::syntax::Ty::Array(t) => Ok(BType::Array(Box::new(Self::from_ty(t)?))),
-            crate::syntax::Ty::Fn(params, ret) => Ok(BType::Fn(
+            crate::syntax::Ty::Fn(params, ret, _) => Ok(BType::Fn(
                 params
                     .iter()
                     .map(Self::from_ty)

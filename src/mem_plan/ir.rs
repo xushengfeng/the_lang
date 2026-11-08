@@ -55,6 +55,9 @@ pub enum MemExpr {
     Lambda {
         params: Vec<String>,
         body: Box<MemExpr>,
+        /// Captured outer variables.  The evaluator clones the environment;
+        /// validation uses this set to keep closures lexical.
+        captures: Vec<String>,
     },
     Apply {
         callee: Box<MemExpr>,

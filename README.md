@@ -25,6 +25,8 @@ cargo run --bin proof_demo -- examples/proofs.alt
 cargo run --bin ownership_demo -- examples/callbacks.alt
 cargo run --bin ownership_demo -- examples/callbacks.lisp
 cargo run --bin vm_demo -- examples/callbacks.alt
+cargo run --bin ownership_demo -- examples/borrow_callback.alt
+cargo run --bin ownership_demo -- examples/borrow_callback.lisp
 ```
 
 `sum_demo` 会输出：
@@ -146,6 +148,8 @@ proof nat_refl:
 | `src/main.rs` | 表面语法原型 CLI（`.alt` / `.lisp`） |
 | `examples/callbacks.alt` | 回调/高阶函数示例（缩进语法） |
 | `examples/callbacks.lisp` | 同一示例（S-expression 语法） |
+| `examples/borrow_callback.alt` | 非逃逸 borrow 捕获示例 |
+| `examples/borrow_callback.lisp` | 同一示例（S-expression 语法） |
 | `examples/proofs.alt` | 内核检查的数学证明（缩进语法） |
 | `examples/proofs.lisp` | 同一组证明（S-expression 语法） |
 | `docs/` | 设计、验证风格、内核、类型/运行时、AI 优化、硬件无关、可行性、路线图 |
@@ -230,6 +234,7 @@ proof nat_refl:
 - 直接 `if`：降成 primitive branch，只执行选中分支，不构造分支闭包；`optimized=false` 时构造两个分支 thunk 并只强制选中一个，`MemStats.thunks` 计数；
 - MemIR 一等函数/闭包：`Lambda`/`Apply`/`FnRef`/`Thunk`/`Force`；闭包捕获环境，thunk 是零参延迟值；`MemStats.closures` 计数；
 - 表面回调/高阶函数：`Fn(T, ...) -> R` 类型、`fn(x: T) -> R { ... }` lambda、顶层函数名作为函数值、通过函数值调用、嵌套闭包；ownership 检查器、树解释器和字节码 VM 都支持；VM 通过 lambda lifting + `MakeClosure`/`CallClosure` 执行；`examples/callbacks.alt` 与 `examples/callbacks.lisp` 结果一致；
+- 非逃逸 borrow 捕获：lambda 可以捕获 `borrow` 并在当前函数内直接调用；返回、存入数组、`set`/`push`、作为参数传给别的函数都会被拒绝；`Ty::Fn` 携带 checker-only capture set，`MemIR::Lambda` 记录 captures 并在验证器检查；
 - MemIR 静态验证器：scope、类型、调用 arity、if 分支类型；`run_program_in` 执行前验证；
 - 工程收口：`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --all-targets` 和 demo smoke 已进 CI；
 - `src/mem_plan` 拆成 `ir`/`planner`/`eval`/`bridge`/`validate`，并有 `tests/` 集成测试；
@@ -265,6 +270,6 @@ proof nat_refl:
 - `Vec`/`Fin` 与更真实的数组/边界证明；
 - `spec` / `impl` / `refines` 多实现；
 - 完整区域/借用生命周期（当前是简化版唯一性检查）；
-- IR/ANF；闭包逃逸分析与区域提升（当前 lambda 只读捕获，不能捕获 borrow，也不能跨区域返回）；
+- IR/ANF；闭包逃逸分析与区域提升（当前 lambda 只读捕获；borrow 捕获只允许非逃逸使用，不能返回/存储/传给函数，也不能跨区域）；
 - 表示层（布局、字长、进制）与翻译验证；
 - SMT 证书、证明搜索、LLM 候选生成。

@@ -1,0 +1,15 @@
+// A closure may capture a borrow only while it stays inside the caller.
+//
+// `first` creates a local callback that reads `a`; it calls it immediately.
+// Returning that callback, storing it in an array, or passing it to another
+// function is rejected by the ownership checker.
+
+fn first(borrow a: Array<Int>) -> Int {
+  let get = fn(i: Int) -> Int { a[i] };
+  get(0)
+}
+
+fn main() -> Int {
+  let a = [4, 5, 6];
+  first(a)
+}

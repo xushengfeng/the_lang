@@ -107,8 +107,13 @@ proof nat_refl:
 - `Ty::Fn(params, ret)` 是运行时函数值；proof 参数在函数值里被擦除。
 - lambda 捕获环境是**只读**的：可以读取外层值，但不能 move、原地修改捕获值；
   捕获的数组在 `set` 时走复制路径。
-- lambda 不能捕获 `borrow` 参数；需要时把它作为回调参数显式传入。
-- 嵌套 lambda 可以捕获外层 lambda 的参数（形成闭包链）。
+- lambda 可以捕获 `borrow`，但只能是**非逃逸**使用：lambda 必须在当前函数内
+  直接调用。返回、存入数组、`set`/`push`、或作为参数传给别的函数都会被拒绝。
+- `Ty::Fn` 的 capture set 是 checker-only 的：类型相等时忽略它，逃逸检查
+  单独读取；`MemIR::Lambda` 记录 captures，验证器检查捕获名在环境中存在。
+- 嵌套 lambda 可以捕获外层 lambda 的参数（形成闭包链）；如果外层捕获了
+  borrow，内层闭包也会继承这个 capture set。
+- `examples/borrow_callback.alt` / `.lisp` 展示允许的局部 borrow 回调。
 - MemIR 桥支持 `Lambda`/`FnRef`/`Apply`；MemIR 仍不支持算术、`print`、
   动态下标，所以带这些操作的 callback 目前只在树解释器和 VM 中执行。
 - 区域逃逸分析还没实现：闭包不能跨区域返回；lambda 由 VM 用 lambda lifting

@@ -195,9 +195,15 @@ fn lower_expr(expr: &Expr) -> Result<MemExpr, BridgeError> {
         }),
         Expr::Call { name, args } => lower_call(name, args),
         Expr::FnRef(name) => Ok(MemExpr::FnRef(name.clone())),
-        Expr::Lambda { params, body, .. } => Ok(MemExpr::Lambda {
+        Expr::Lambda {
+            params,
+            body,
+            captures,
+            ..
+        } => Ok(MemExpr::Lambda {
             params: params.iter().map(|p| p.name.clone()).collect(),
             body: Box::new(lower_expr(body)?),
+            captures: captures.clone(),
         }),
         Expr::Apply { callee, args } => Ok(MemExpr::Apply {
             callee: Box::new(lower_expr(callee)?),

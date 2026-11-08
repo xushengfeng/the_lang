@@ -38,3 +38,6 @@ jobs:
           cargo run --quiet --bin ownership_demo -- examples/callbacks.alt
           cargo run --quiet --bin ownership_demo -- examples/callbacks.lisp
           cargo run --quiet --bin vm_demo -- examples/callbacks.alt
+          cargo run --quiet --bin ownership_demo -- examples/borrow_callback.alt
+          cargo run --quiet --bin ownership_demo -- examples/borrow_callback.lisp
+          cargo run --quiet --bin vm_demo -- examples/borrow_callback.alt

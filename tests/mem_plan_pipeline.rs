@@ -77,6 +77,7 @@ fn lambda_apply_and_thunk_force() {
         callee: Box::new(MemExpr::Lambda {
             params: vec!["x".into()],
             body: Box::new(MemExpr::Var("x".into())),
+            captures: vec![],
         }),
         args: vec![MemExpr::Int(7)],
     };

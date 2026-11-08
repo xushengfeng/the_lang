@@ -106,8 +106,12 @@ Heap   = RegionId ⇀ Region
 - thunk/closure 还不能存进数组，也不能跨函数返回；区域逃逸会拒绝；
 - 表面语言已有 `Ty::Fn`、lambda、顶层函数值（`FnRef`）和函数值调用：
   `fn apply(f: Fn(Int) -> Int, x: Int) -> Int { f(x) }`；
-- lambda 捕获环境是只读的：可以读捕获值，但不能 move、原地修改或捕获
-  `borrow`；因此 `set` 对捕获数组会走复制路径；
+- lambda 捕获环境是只读的：可以读捕获值，但不能 move 或原地修改；
+  因此 `set` 对捕获数组会走复制路径；
+- `borrow` 捕获只允许非逃逸使用：lambda 必须在当前函数内直接调用；
+  返回、存入数组、`set`/`push` 或作为参数传给别的函数都会被拒绝；
+- `Ty::Fn` 带一个 checker-only 的 capture set，`MemIR::Lambda` 记录 captures；
+  MemIR 验证器检查捕获名在环境中存在；
 - MemIR 桥把 surface lambda/函数值降成 `Lambda`/`FnRef`/`Apply`；
   算术、`print`、动态下标在 MemIR 里仍不支持。
 
