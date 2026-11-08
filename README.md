@@ -6,7 +6,7 @@
 > 业务代码保持可读，性能代码由 AI 重写并被证明约束；
 > 源码硬件无关，内存布局/进制等表示由优化器选择，并用精化关系保证正确。
 
-当前仓库处于**内核里程碑**：一个类 Lean 的依赖类型小内核已经可以检查 `sum` 两个实现的等价证明。
+当前仓库处于**内核里程碑**：一个类 Lean 的依赖类型小内核已经可以检查 `sum` 两个实现的等价证明；在此之上有一个无 RC/GC 的区域内存原型（`docs/18`）。
 
 ## 快速开始
 
@@ -17,6 +17,9 @@ cargo run --bin ownership_demo
 cargo run --bin vm_demo
 cargo run --bin ownership_proof_demo
 cargo run --bin refines_demo
+cargo run --bin region_demo
+cargo run --bin mem_plan_demo
+cargo run --bin surface_mem_demo
 ```
 
 `sum_demo` 会输出：
@@ -56,6 +59,11 @@ cargo run --bin alethe -- examples/checks.alt
 | `src/bin/ownership_demo.rs` | 所有权 demo CLI |
 | `src/vm.rs` | 字节码定义、编译器、栈式 VM |
 | `src/bin/vm_demo.rs` | VM demo CLI |
+| `src/region.rs` | 区域堆模型：分配、原地/复制更新、区域释放、观察等价 |
+| `src/bin/region_demo.rs` | 区域内存 demo CLI |
+| `src/mem_plan.rs` | 最小内存规划器 + MemIR：move/downgrade/copy、原地/复制选择、逃逸拒绝、checked surface 桥、普通函数调用与每调用区域 |
+| `src/bin/mem_plan_demo.rs` | 内存规划 demo CLI |
+| `src/bin/surface_mem_demo.rs` | checked surface 函数到区域堆的 demo CLI |
 | `examples/ownership.alt` | 所有权/VM 示例 |
 | `src/syntax.rs` | 早期精化类型表面语法原型（独立实验） |
 | `src/main.rs` | 表面语法原型 CLI |
@@ -80,7 +88,8 @@ cargo run --bin alethe -- examples/checks.alt
 15. [函数式默认复制、性能与原地修改](docs/15-functional-performance.md)
 16. [编译器、检查器、VM 到底是什么](docs/16-compiler-architecture.md)
 17. [业务代码、类型证明、优化：文件与数据流](docs/17-dataflow.md)
-18. [决策记录与开放问题](docs/09-decisions.md)
+18. [区域内存模型（无 RC/GC）](docs/18-region-memory.md)
+19. [决策记录与开放问题](docs/09-decisions.md)
 
 ## 模型优先
 
@@ -90,36 +99,48 @@ cargo run --bin alethe -- examples/checks.alt
 - `12-vm-model.md`：字节码语法、栈类型、堆/帧、小步语义、字节码验证、编译正确性；
 - `13-lowering-model.md`：IR 分层、证明擦除、原地/复制 lowering、精化/翻译验证；
 - `14-roles.md`：组件命名（`typecheck`/`owncheck`/`borrowck`/`regioninfer`/`effectcheck`/`refinecheck`/`proofcheck`/`ownlower`）；
-- `15-functional-performance.md`：函数式复制语义、Rust 生命周期能借什么、原地修改的安全条件。
+- `15-functional-performance.md`：函数式复制语义、Rust 生命周期能借什么、原地修改的安全条件；
+- `18-region-memory.md`：无 RC/GC 的区域堆、分配/释放规则、原地/复制与证明义务；`src/region.rs`/`src/mem_plan.rs` 是可执行种子。
 
-模型稳定前，Rust 实现先冻结；后续只在模型确定后回填代码。
+模型稳定前，Rust 代码只做最小参考实现和可执行模型种子，不追求完整功能。
 
-| 能力 | 模型（docs 11–13） | Rust 原型 |
+| 能力 | 模型（docs 11–13/18） | Rust 原型 |
 |---|---|---|
 | `own` / `borrow` / 推断 unique | ✅ 规则完整 | ✅ 简化版 |
-| `borrow_mut` / `share` / RC | ✅ 规则 | ❌ |
+| `borrow_mut` / `share` | ✅ 规则 | ❌ |
+| RC / GC | 不作为当前路线（`docs/18`） | ❌ |
 | 区域/生命周期约束 | ✅ 规则 | ❌ |
+| 区域堆：分配/释放/原地/复制 | ✅ 模型 | ✅ `RegionHeap` + planner + surface 桥 + 普通函数调用 |
+| MemIR 闭包/thunk | ✅ 模型 | ✅ `Lambda`/`Apply`/`Thunk`/`Force` |
+| 表面函数类型 / lambda | ✅ 设计 | ❌ |
 | 效果 row（pure/read/write/alloc/io） | ✅ 规则 | ❌ |
 | 结构体/变体/切片 | ✅ 类型 | ❌ |
-| 字节码语法/栈类型 | ✅ 规格 | ✅ 实现（无验证器） |
+| 字节码语法/栈类型 | ✅ 规格 | ✅ 实现（含验证器） |
 | 堆/帧/小步语义 | ✅ 规格 | ❌ |
 | 字节码验证 | ✅ 义务 | ✅ 栈/局部/跳转/调用/数组类型 |
 | 证明擦除 | ✅ 规格 | ⚠️ 仅 proof 参数 |
 | 原地精化证明 | ✅ `Bool2` + `Nat` 模型已检查 | ❌ 真实 lowering |
 | Borrow/BorrowMut 权限 | ✅ 互斥/只读/可写已检查 | ⚠️ 无 acquire/release/区域 |
 | 编译正确性 | ✅ 义务 | ❌ |
-| 闭包/异常/并发 | 后续 | ❌ |
+| 异常/并发 | 后续 | ❌ |
 
 ## 当前已证明 / 尚未实现
 
 **已跑通**
 
+- 66 个单元测试通过；
 - 依赖类型内核的类型检查与定义等价；
 - `Nat.rec` / `List.rec` / `Eq.subst` 的归约；
 - `add_assoc`、`add_zero`、`go_eq`、`sum_fast_eq` 的证明检查；
 - 错误证明被拒绝；
 - 两个 `sum` 实现的计算结果一致；
 - `own` / `borrow` / unique 检查：use-after-move、借用逃逸、把借用 move 进 `own` 参数都会被拒绝；
+- 区域堆内存模型：分配/释放、原地/复制、观察等价；释放后访问和悬垂嵌套区域被拒绝（`src/region.rs`）；
+- 最小内存规划器（`src/mem_plan.rs`）：`own`/`share` 决定 move/downgrade/copy，`set` 在唯一时原地、共享时复制；use-after-consume 和区域数组逃逸被拒绝；
+- checked surface 桥：`plan_checked_fn` + `run_fn_in` 把 `ownership::CheckedFn` 的 `set`/`push` 直接降到区域堆执行；`fill` 原地、`fill_shared` 复制、`grow` 原地 push 已跑通；
+- 普通函数调用：`plan_checked_program` + `run_program`；每次调用一个区域，标量返回释放，被调用者新建的数组返回值复制到调用者区域；`fill(a, 9)` 原地、`make(7)` 返回复制已跑通；
+- 直接 `if`：降成 primitive branch，只执行选中分支，不构造分支闭包；`optimized=false` 时构造两个分支 thunk 并只强制选中一个，`MemStats.thunks` 计数；
+- MemIR 一等函数/闭包：`Lambda`/`Apply`/`Thunk`/`Force`；闭包捕获环境，thunk 是零参延迟值；`MemStats.closures` 计数；
 - `set` 在唯一值上 lowering 成原地，在共享值上复制；解释器输出分配/复制统计；
 - 栈式 VM：`source → ownership check/lowering → bytecode → verify → VM`，证明参数擦除（`get` 的 runtime arity 为 2），统计与解释器一致；
 - 字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组操作；错误字节码被拒绝；

@@ -11,7 +11,7 @@
 //! The next step is to generate these obligations from the surface spec
 //! instead of hand-mapping names.
 
-use crate::dependent::{sapp, sapp2, sapp3, sapp4, sapp5, sconst, slam, spi, svar, Env, STerm};
+use crate::dependent::{sapp, sapp2, sapp3, sapp5, sconst, slam, spi, svar, Env, STerm};
 use crate::ownership_proof::build_borrow;
 
 fn nat() -> STerm {

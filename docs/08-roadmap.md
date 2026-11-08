@@ -70,6 +70,13 @@
 - [x] 唯一性/仿射检查（简化版）；
 - [x] 原地更新 lowering（`set`/`push`）；
 - [x] 分配/复制/原地统计；
+- [x] 区域堆模型（`src/region.rs`）：分配/释放、原地/复制、观察等价；
+- [x] 内存规划器 + MemIR（`src/mem_plan.rs`）：move/downgrade/copy、原地/复制选择；
+- [x] 普通函数调用 + 每调用区域 + 返回值复制；
+- [x] 直接 `if` primitive branch + thunk 回退（`optimized=false`）；
+- [x] MemIR 一等闭包/thunk（`Lambda`/`Apply`/`Thunk`/`Force`）；
+- [ ] 表面函数类型 / lambda；
+- [ ] 逃逸分析 / 区域提升 / 闭包逃逸；
 - [ ] 区域推断（至少栈式区域）；
 - [ ] 显式 `&`/`&mut` 与生命周期；
 - [ ] 证明 facts 流入优化器（边界/除零检查消除）；

@@ -31,6 +31,18 @@ path = "src/bin/ownership_proof_demo.rs"
 name = "refines_demo"
 path = "src/bin/refines_demo.rs"
 
+[[bin]]
+name = "region_demo"
+path = "src/bin/region_demo.rs"
+
+[[bin]]
+name = "mem_plan_demo"
+path = "src/bin/mem_plan_demo.rs"
+
+[[bin]]
+name = "surface_mem_demo"
+path = "src/bin/surface_mem_demo.rs"
+
 [profile.release]
 opt-level = 3
 lto = true

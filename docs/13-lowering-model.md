@@ -97,7 +97,7 @@ borrow(r) x
   → region end: invalidate
 
 share x
-  → RC increment/decrement (或 GC)
+  → 区域内只读别名，或复制（当前无 RC/GC）
 ```
 
 ### 3.3 `set` / `push`

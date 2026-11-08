@@ -1,7 +1,9 @@
 pub mod dependent;
+pub mod mem_plan;
 pub mod ownership;
 pub mod ownership_proof;
 pub mod refines;
 pub mod refines_proof;
+pub mod region;
 pub mod syntax;
 pub mod vm;

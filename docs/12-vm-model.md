@@ -328,8 +328,8 @@ obs(set_in_place(H,l,i,v)) = obs(set_pure(H,l,i,v))
 当前 `src/vm.rs`：
 
 - 栈式字节码、帧、调用/返回、数组、原地/复制、统计；
-- 没有字节码验证器；
-- 没有形式化语义；
+- 有字节码验证器：栈高度/类型、局部变量、跳转、调用/返回、数组类型；
+- 没有形式化语义，也没有验证器的 soundness 证明；
 - 没有闭包/异常/GC/并发；
 - 边界/除零检查始终打开（`checked=true`）。
 
@@ -338,7 +338,7 @@ obs(set_in_place(H,l,i,v)) = obs(set_pure(H,l,i,v))
 ## 10. 下一步
 
 1. 把字节码语法/栈类型/小步语义写成正式规则（本文已给骨架）。
-2. 选最小子集（Int/Bool/Array/call/ret/set）做字节码验证器 + progress/preservation。
+2. 证明字节码验证器的 soundness，并给 progress/preservation。
 3. 证明 `Unique` 下 `set_in_place` 精化 `set_pure`。
 4. 再证明 `compile` 的 simulation，或先做 translation validation。
 5. 闭包/异常/并发模型后置。

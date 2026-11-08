@@ -472,6 +472,7 @@ impl Parser {
         &self.toks[self.pos].tok
     }
 
+    #[allow(dead_code)]
     fn peek_at(&self, n: usize) -> &Tok {
         let i = (self.pos + n).min(self.toks.len() - 1);
         &self.toks[i].tok
