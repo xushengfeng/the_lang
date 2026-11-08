@@ -15,6 +15,7 @@ mod builtins;
 mod check;
 mod debruijn;
 mod env;
+mod surface;
 mod term;
 
 pub use debruijn::instantiate;

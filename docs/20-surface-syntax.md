@@ -73,7 +73,36 @@ fn main() -> Int {
 参数是 `(name type)`。中缀操作在 S-expression 里是前缀形式：
 `(+ a b)`、`(<= 0 i)`、`(&& p q)`、`(! p)`。
 
-## 3. 回调语义与边界
+## 3. 数学证明
+
+`proof` 声明直接携带内核类型和证明项：
+
+```alethe
+proof nat_refl:
+  Pi(n, Nat, Eq(Nat, n, n))
+{
+  Lam(n, Nat, Eq.refl(Nat, n))
+}
+```
+
+```lisp
+(proof nat_refl
+  (forall ((n Nat)) (Eq Nat n n))
+  (lambda ((n Nat)) (Eq.refl Nat n)))
+```
+
+- 内核项构造子：`Pi`/`forall`、`Lam`/`lambda`、`Let`、`App`、`Sort`、
+  `Prop`、`Type`、`Nat` 字面量、点号常量（`Nat.add`、`Eq.refl`）。
+- 名字解析：被 `Pi`/`Lam`/`Let` 绑定的名字是变量，其余是全局常量。
+- `.alt` 用函数式语法 `Eq.refl(Nat, n)`；Lisp 用前缀应用
+  `(Eq.refl Nat n)`。
+- 显式项没有元变量/统一，也没有 tactic 自动构造；`theorem { intro ... }`
+  仍只是解析层，尚未连内核。
+- `proof_demo` 会把文件中的每条证明交给内核；成功打印 `✓`，失败退出并
+  打印类型错误。`examples/proofs.*` 包含 `∀p, p→p`、`∀n, n=n`、`2+2=4`、
+  复用已有定理，以及用 `Nat.recProp` 归纳证明的 `∀n, n+0=n`。
+
+## 4. 回调语义与边界
 
 - `Ty::Fn(params, ret)` 是运行时函数值；proof 参数在函数值里被擦除。
 - lambda 捕获环境是**只读**的：可以读取外层值，但不能 move、原地修改捕获值；

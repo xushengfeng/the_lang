@@ -76,6 +76,7 @@ impl Parser {
                 Tok::Spec => decls.push(Decl::Spec(self.parse_spec()?)),
                 Tok::Impl => decls.push(Decl::Impl(self.parse_impl()?)),
                 Tok::Theorem => decls.push(Decl::Theorem(self.parse_theorem()?)),
+                Tok::Proof => decls.push(Decl::Proof(self.parse_proof()?)),
                 other => return self.err(format!("expected declaration, found {:?}", other)),
             }
         }
@@ -286,6 +287,122 @@ impl Parser {
             },
             other => self.err(format!("expected sort, found {:?}", other)),
         }
+    }
+
+    fn parse_proof(&mut self) -> Result<ProofDecl, ParseError> {
+        self.expect(Tok::Proof)?;
+        let name = self.ident()?;
+        self.expect(Tok::Colon)?;
+        let ty = self.parse_kterm()?;
+        let body = if self.eat(&Tok::LBrace) {
+            let body = self.parse_kterm()?;
+            self.expect(Tok::RBrace)?;
+            body
+        } else {
+            self.expect(Tok::Eq)?;
+            self.parse_kterm()?
+        };
+        Ok(ProofDecl { name, ty, body })
+    }
+
+    fn parse_kterm(&mut self) -> Result<KTerm, ParseError> {
+        let lhs = self.parse_kterm_app()?;
+        if self.eat(&Tok::Arrow) {
+            let rhs = self.parse_kterm()?;
+            Ok(KTerm::Pi("_".into(), Box::new(lhs), Box::new(rhs)))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn parse_kterm_app(&mut self) -> Result<KTerm, ParseError> {
+        let mut head = self.parse_kterm_atom()?;
+        while self.eat(&Tok::LParen) {
+            let mut args = Vec::new();
+            if !self.eat(&Tok::RParen) {
+                loop {
+                    args.push(self.parse_kterm()?);
+                    if self.eat(&Tok::Comma) {
+                        continue;
+                    }
+                    self.expect(Tok::RParen)?;
+                    break;
+                }
+            }
+            for arg in args {
+                head = KTerm::App(Box::new(head), Box::new(arg));
+            }
+        }
+        Ok(head)
+    }
+
+    fn parse_kterm_atom(&mut self) -> Result<KTerm, ParseError> {
+        match self.bump() {
+            Tok::Int(n) if n >= 0 => Ok(KTerm::Nat(n as u64)),
+            Tok::Int(_) => self.err("kernel Nat literal must be non-negative"),
+            Tok::LParen => {
+                let term = self.parse_kterm()?;
+                self.expect(Tok::RParen)?;
+                Ok(term)
+            }
+            Tok::Ident(name) => {
+                // Constructor forms: Pi(x, A, B), Lam(x, A, b), Let(x, A, v, b).
+                if matches!(name.as_str(), "Pi" | "Lam" | "Let") && self.eat(&Tok::LParen) {
+                    return self.parse_kterm_binder(&name);
+                }
+                if name == "Sort" && self.eat(&Tok::LParen) {
+                    let n = match self.bump() {
+                        Tok::Int(n) if n >= 0 => n as u32,
+                        other => {
+                            return self.err(format!("expected universe level, got {other:?}"))
+                        }
+                    };
+                    self.expect(Tok::RParen)?;
+                    return Ok(KTerm::Sort(n));
+                }
+                if name == "Prop" {
+                    return Ok(KTerm::Sort(0));
+                }
+                if name == "Type" {
+                    return Ok(KTerm::Sort(1));
+                }
+                // Dotted constant names: Nat.add, Eq.refl, ...
+                let mut full = name;
+                while self.eat(&Tok::Dot) {
+                    let part = self.ident()?;
+                    full.push('.');
+                    full.push_str(&part);
+                }
+                Ok(KTerm::Name(full))
+            }
+            other => self.err(format!("expected kernel term, found {:?}", other)),
+        }
+    }
+
+    fn parse_kterm_binder(&mut self, ctor: &str) -> Result<KTerm, ParseError> {
+        let name = self.ident()?;
+        self.expect(Tok::Comma)?;
+        let ty = self.parse_kterm()?;
+        self.expect(Tok::Comma)?;
+        if ctor == "Let" {
+            let value = self.parse_kterm()?;
+            self.expect(Tok::Comma)?;
+            let body = self.parse_kterm()?;
+            self.expect(Tok::RParen)?;
+            return Ok(KTerm::Let(
+                name,
+                Box::new(ty),
+                Box::new(value),
+                Box::new(body),
+            ));
+        }
+        let body = self.parse_kterm()?;
+        self.expect(Tok::RParen)?;
+        Ok(match ctor {
+            "Pi" => KTerm::Pi(name, Box::new(ty), Box::new(body)),
+            "Lam" => KTerm::Lam(name, Box::new(ty), Box::new(body)),
+            _ => unreachable!(),
+        })
     }
 
     fn parse_theorem(&mut self) -> Result<ThmDecl, ParseError> {

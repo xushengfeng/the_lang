@@ -168,6 +168,7 @@ fn lower_decl(form: &Sexp) -> Result<Decl, ParseError> {
         Some("spec") => Ok(Decl::Spec(lower_spec(form)?)),
         Some("impl") => Ok(Decl::Impl(lower_impl(form)?)),
         Some("theorem") => Ok(Decl::Theorem(lower_theorem(form)?)),
+        Some("proof") => Ok(Decl::Proof(lower_proof(form)?)),
         Some(other) => err(form, format!("unknown declaration `{other}`")),
         None => err(form, "expected a declaration"),
     }
@@ -333,6 +334,142 @@ fn lower_theorem(form: &Sexp) -> Result<ThmDecl, ParseError> {
         prop,
         tactics,
     })
+}
+
+fn lower_proof(form: &Sexp) -> Result<ProofDecl, ParseError> {
+    let rest = tail(form, "proof")?;
+    if rest.len() != 3 {
+        return err(form, "proof expects a name, a type, and a proof term");
+    }
+    Ok(ProofDecl {
+        name: atom(&rest[0])?.to_string(),
+        ty: lower_kterm(&rest[1])?,
+        body: lower_kterm(&rest[2])?,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Kernel terms
+// ---------------------------------------------------------------------------
+
+fn lower_kterm(form: &Sexp) -> Result<KTerm, ParseError> {
+    match form {
+        Sexp::Atom(name, _, _) => {
+            if let Ok(n) = name.parse::<u64>() {
+                Ok(KTerm::Nat(n))
+            } else if name == "Prop" {
+                Ok(KTerm::Sort(0))
+            } else if name == "Type" {
+                Ok(KTerm::Sort(1))
+            } else {
+                Ok(KTerm::Name(name.clone()))
+            }
+        }
+        Sexp::List(items, _, _) => {
+            if items.is_empty() {
+                return err(form, "empty kernel term");
+            }
+            let Some(Sexp::Atom(name, _, _)) = items.first() else {
+                let mut out = lower_kterm(&items[0])?;
+                for arg in &items[1..] {
+                    out = KTerm::App(Box::new(out), Box::new(lower_kterm(arg)?));
+                }
+                return Ok(out);
+            };
+            let args = &items[1..];
+            match name.as_str() {
+                "forall" | "Pi" => {
+                    if args.len() != 2 {
+                        return err(form, "forall/Pi expects binders and a body");
+                    }
+                    let binders = lower_binders(&args[0])?;
+                    let mut body = lower_kterm(&args[1])?;
+                    for (binder, ty) in binders.into_iter().rev() {
+                        body = KTerm::Pi(binder, Box::new(ty), Box::new(body));
+                    }
+                    Ok(body)
+                }
+                "lambda" | "Lam" => {
+                    if args.len() != 2 {
+                        return err(form, "lambda/Lam expects binders and a body");
+                    }
+                    let binders = lower_binders(&args[0])?;
+                    let mut body = lower_kterm(&args[1])?;
+                    for (binder, ty) in binders.into_iter().rev() {
+                        body = KTerm::Lam(binder, Box::new(ty), Box::new(body));
+                    }
+                    Ok(body)
+                }
+                "Let" => {
+                    if args.len() != 4 {
+                        return err(form, "Let expects name, type, value, and body");
+                    }
+                    Ok(KTerm::Let(
+                        atom(&args[0])?.to_string(),
+                        Box::new(lower_kterm(&args[1])?),
+                        Box::new(lower_kterm(&args[2])?),
+                        Box::new(lower_kterm(&args[3])?),
+                    ))
+                }
+                "Sort" => {
+                    if args.len() != 1 {
+                        return err(form, "Sort expects a universe level");
+                    }
+                    let level = atom(&args[0])?.parse::<u32>().map_err(|_| {
+                        ParseError::new("invalid universe level", form.line(), form.col())
+                    })?;
+                    Ok(KTerm::Sort(level))
+                }
+                "Nat" => {
+                    if args.len() != 1 {
+                        return err(form, "Nat expects a literal");
+                    }
+                    let n = atom(&args[0])?.parse::<u64>().map_err(|_| {
+                        ParseError::new("invalid Nat literal", form.line(), form.col())
+                    })?;
+                    Ok(KTerm::Nat(n))
+                }
+                "App" => {
+                    if args.len() != 2 {
+                        return err(form, "App expects two terms");
+                    }
+                    Ok(KTerm::App(
+                        Box::new(lower_kterm(&args[0])?),
+                        Box::new(lower_kterm(&args[1])?),
+                    ))
+                }
+                _ => {
+                    let mut out = KTerm::Name(name.clone());
+                    for arg in args {
+                        out = KTerm::App(Box::new(out), Box::new(lower_kterm(arg)?));
+                    }
+                    Ok(out)
+                }
+            }
+        }
+    }
+}
+
+fn lower_binders(form: &Sexp) -> Result<Vec<(String, KTerm)>, ParseError> {
+    let items = list(form)?;
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    let multiple = matches!(items.first(), Some(Sexp::List(..)));
+    let groups: Vec<&Sexp> = if multiple {
+        items.iter().collect()
+    } else {
+        vec![form]
+    };
+    let mut out = Vec::with_capacity(groups.len());
+    for group in groups {
+        let parts = list(group)?;
+        if parts.len() != 2 {
+            return err(group, "binder expects (name type)");
+        }
+        out.push((atom(&parts[0])?.to_string(), lower_kterm(&parts[1])?));
+    }
+    Ok(out)
 }
 
 fn lower_body(form: &Sexp, forms: &[Sexp]) -> Result<Expr, ParseError> {

@@ -50,6 +50,9 @@ fn main() {
                     syntax::Decl::Theorem(t) => {
                         println!("theorem {}: {} tactic(s)", t.name, t.tactics.len())
                     }
+                    syntax::Decl::Proof(p) => {
+                        println!("proof {}: {} := {}", p.name, p.ty, p.body)
+                    }
                 }
             }
         }

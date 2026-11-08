@@ -27,9 +27,10 @@
 
 ## M1：表面证明语言 + 擦除
 
-- 表面项语法（`def`/`theorem`/`fun`/`match`）；
-- 元变量、统一、hole（`?`）；
-- tactic：`intro`、`exact`、`apply`、`induction`、`rw`、`simp`；
+- [x] 表面显式项（`proof`：`Pi`/`Lam`/`Eq`/`Nat.rec`，`.alt` 和 `.lisp`）；
+- [ ] `def`/`fun`/`match` 表面项；
+- [ ] 元变量、统一、hole（`?`）；
+- [ ] tactic：`intro`、`exact`、`apply`、`induction`、`rw`、`simp`；
 - 结构化 goal（JSON）；
 - 证明擦除：`Prop` 参数、证明字段、类型索引；
 - 运行时 IR（ANF，无 proof）。

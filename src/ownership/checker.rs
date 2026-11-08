@@ -14,7 +14,7 @@ pub fn check_program(prog: &Program) -> Result<CheckedProgram, String> {
         match d {
             Decl::Fn(f) => checker.collect(f)?,
             Decl::Impl(i) => checker.collect(&i.f)?,
-            Decl::Spec(_) | Decl::Theorem(_) => {}
+            Decl::Spec(_) | Decl::Theorem(_) | Decl::Proof(_) => {}
         }
     }
     let mut funcs = Vec::new();
@@ -22,7 +22,7 @@ pub fn check_program(prog: &Program) -> Result<CheckedProgram, String> {
         match d {
             Decl::Fn(f) => funcs.push(checker.check_fn(f)?),
             Decl::Impl(i) => funcs.push(checker.check_fn(&i.f)?),
-            Decl::Spec(_) | Decl::Theorem(_) => {}
+            Decl::Spec(_) | Decl::Theorem(_) | Decl::Proof(_) => {}
         }
     }
     Ok(CheckedProgram { funcs })

@@ -92,6 +92,24 @@ pub fn binop_str(op: BinOp) -> &'static str {
     }
 }
 
+impl fmt::Display for KTerm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            KTerm::Name(n) => write!(f, "{n}"),
+            KTerm::Sort(0) => write!(f, "Prop"),
+            KTerm::Sort(1) => write!(f, "Type"),
+            KTerm::Sort(n) => write!(f, "Type {n}"),
+            KTerm::Nat(n) => write!(f, "{n}"),
+            KTerm::App(a, b) => write!(f, "({a} {b})"),
+            KTerm::Lam(x, ty, body) => write!(f, "Lam({x}, {ty}, {body})"),
+            KTerm::Pi(x, ty, body) => write!(f, "Pi({x}, {ty}, {body})"),
+            KTerm::Let(x, ty, value, body) => {
+                write!(f, "Let({x}, {ty}, {value}, {body})")
+            }
+        }
+    }
+}
+
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -1,0 +1,42 @@
+// Kernel-checked mathematical proofs, written as explicit terms.
+// Run: cargo run --bin proof_demo -- examples/proofs.alt
+//
+// `Pi`, `Lam`, `App`, `Sort`, and dotted constants map directly to the kernel.
+// There are no holes or tactics here yet: the term is the proof.
+
+proof imp_refl:
+  Pi(p, Prop, Pi(h, p, p))
+{
+  Lam(p, Prop, Lam(h, p, h))
+}
+
+proof nat_refl:
+  Pi(n, Nat, Eq(Nat, n, n))
+{
+  Lam(n, Nat, Eq.refl(Nat, n))
+}
+
+proof two_add_two:
+  Eq(Nat, Nat.add(2, 2), 4)
+{
+  Eq.refl(Nat, 4)
+}
+
+proof imp_refl_again:
+  Pi(p, Prop, Pi(h, p, p))
+{
+  imp_refl
+}
+
+// Induction: ∀ n : Nat, n + 0 = n, by Nat.recProp.
+proof add_zero_surface:
+  Pi(n, Nat, Eq(Nat, Nat.add(n, 0), n))
+{
+  Lam(n, Nat,
+    Nat.recProp(
+      Lam(n, Nat, Eq(Nat, Nat.add(n, 0), n)),
+      Eq.refl(Nat, 0),
+      Lam(n, Nat, Lam(ih, Eq(Nat, Nat.add(n, 0), n),
+        congr_succ(Nat.add(n, 0), n, ih))),
+      n))
+}

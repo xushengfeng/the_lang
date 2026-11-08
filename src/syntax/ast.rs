@@ -13,6 +13,28 @@ pub enum Decl {
     Spec(SpecDecl),
     Impl(ImplDecl),
     Theorem(ThmDecl),
+    /// A kernel-level theorem: an explicit dependent type and proof term.
+    Proof(ProofDecl),
+}
+
+/// Surface syntax for a kernel term.  Names are resolved by the bridge: a name
+/// bound by an enclosing `Lam`/`Pi`/`Let` is a variable, otherwise a constant.
+#[derive(Clone, Debug)]
+pub enum KTerm {
+    Name(String),
+    Sort(u32),
+    Nat(u64),
+    App(Box<KTerm>, Box<KTerm>),
+    Lam(String, Box<KTerm>, Box<KTerm>),
+    Pi(String, Box<KTerm>, Box<KTerm>),
+    Let(String, Box<KTerm>, Box<KTerm>, Box<KTerm>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ProofDecl {
+    pub name: String,
+    pub ty: KTerm,
+    pub body: KTerm,
 }
 
 #[derive(Clone, Debug)]

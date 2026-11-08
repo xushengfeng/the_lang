@@ -20,6 +20,8 @@ cargo run --bin refines_demo
 cargo run --bin region_demo
 cargo run --bin mem_plan_demo
 cargo run --bin surface_mem_demo
+cargo run --bin proof_demo -- examples/proofs.lisp
+cargo run --bin proof_demo -- examples/proofs.alt
 cargo run --bin ownership_demo -- examples/callbacks.alt
 cargo run --bin ownership_demo -- examples/callbacks.lisp
 cargo run --bin vm_demo -- examples/callbacks.alt
@@ -65,6 +67,27 @@ fn add_one(x: Int) -> Int { x + 1 }
   (f (f x)))
 ```
 
+数学证明用 `proof` 表示：类型和证明项都是显式内核项，由依赖类型内核检查。
+没有 hole/元变量/tactic 自动构造，先保证“能写、能查、能拒绝错误证明”：
+
+```lisp
+(proof nat_refl
+  (forall ((n Nat)) (Eq Nat n n))
+  (lambda ((n Nat)) (Eq.refl Nat n)))
+```
+
+```alethe
+proof nat_refl:
+  Pi(n, Nat, Eq(Nat, n, n))
+{
+  Lam(n, Nat, Eq.refl(Nat, n))
+}
+```
+
+`examples/proofs.lisp` / `examples/proofs.alt` 还包含 `∀ p, p -> p`、
+`2 + 2 = 4`，以及用 `Nat.recProp` 归纳证明的 `∀ n, n + 0 = n`；
+`proof_demo` 会逐个报 `✓`，错误证明被内核拒绝。
+
 ## 仓库地图
 
 | 路径 | 内容 |
@@ -75,6 +98,8 @@ fn add_one(x: Int) -> Int { x + 1 }
 | `src/dependent/env.rs` | `Env`、`add_type`/`add_def`、demo helpers |
 | `src/dependent/builtins.rs` | `Env::new` 与内置定义构造 |
 | `src/dependent/check.rs` | 类型检查、归约、定义等价、pretty |
+| `src/dependent/surface.rs` | 表面 `proof` 项 → 内核 `STerm` 的桥 |
+| `src/bin/proof_demo.rs` | 检查 `.alt` / `.lisp` 中的数学证明 |
 | `src/bin/sum_demo.rs` | 内核 demo：`sum_ref` / `sum_fast` / `sum_fast_eq` |
 | `src/ownership.rs` | 所有权模块入口：re-export `types`/`checker`/`interp` |
 | `src/ownership/types.rs` | `ParamSig`、`FnSig`、`CheckedFn`、`CheckedProgram` |
@@ -121,6 +146,8 @@ fn add_one(x: Int) -> Int { x + 1 }
 | `src/main.rs` | 表面语法原型 CLI（`.alt` / `.lisp`） |
 | `examples/callbacks.alt` | 回调/高阶函数示例（缩进语法） |
 | `examples/callbacks.lisp` | 同一示例（S-expression 语法） |
+| `examples/proofs.alt` | 内核检查的数学证明（缩进语法） |
+| `examples/proofs.lisp` | 同一组证明（S-expression 语法） |
 | `docs/` | 设计、验证风格、内核、类型/运行时、AI 优化、硬件无关、可行性、路线图 |
 
 ## 文档索引
@@ -171,6 +198,8 @@ fn add_one(x: Int) -> Int { x + 1 }
 | MemIR 闭包/thunk | ✅ 模型 | ✅ `Lambda`/`Apply`/`FnRef`/`Thunk`/`Force` |
 | 表面函数类型 / lambda / 回调 | ✅ 设计 | ✅ `Ty::Fn` + lambda + 顶层函数值；解释器和 VM 均支持 |
 | 表面 Lisp 语法 | ✅ 便利前端 | ✅ `.lisp`/`.lsp`/`.sexp` 降到同一 AST |
+| 表面数学证明（显式项） | ✅ 内核检查 | ✅ `proof` + `Pi`/`Lam`/`Eq`/`Nat.rec` |
+| 表面证明 tactic / hole | ✅ 设计 | ❌ 仅解析 `theorem { intro ... }`，尚未连内核 |
 | 效果 row（pure/read/write/alloc/io） | ✅ 规则 | ❌ |
 | 结构体/变体/切片 | ✅ 类型 | ❌ |
 | 字节码语法/栈类型 | ✅ 规格 | ✅ 实现（含验证器） |
@@ -190,6 +219,7 @@ fn add_one(x: Int) -> Int { x + 1 }
 - 依赖类型内核的类型检查与定义等价；
 - `Nat.rec` / `List.rec` / `Eq.subst` 的归约；
 - `add_assoc`、`add_zero`、`go_eq`、`sum_fast_eq` 的证明检查；
+- 表面 `proof` 声明：`examples/proofs.lisp` / `.alt` 中的 `∀p, p→p`、`∀n, n=n`、`2+2=4`、复用已有定理、`Nat.recProp` 归纳证明都由内核检查，错误证明被拒绝；
 - 错误证明被拒绝；
 - 两个 `sum` 实现的计算结果一致；
 - `own` / `borrow` / unique 检查：use-after-move、借用逃逸、把借用 move 进 `own` 参数都会被拒绝；
@@ -230,7 +260,7 @@ fn add_one(x: Int) -> Int { x + 1 }
 
 **下一步**
 
-- 表面证明语言 + 元变量/hole + JSON goal；
+- 显式证明项已支持；下一步是 tactic/元变量/hole + JSON goal；
 - 证明擦除与运行时 IR（VM 已经展示 surface 层的 proof 参数擦除）；
 - `Vec`/`Fin` 与更真实的数组/边界证明；
 - `spec` / `impl` / `refines` 多实现；

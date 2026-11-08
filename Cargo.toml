@@ -43,6 +43,10 @@ path = "src/bin/mem_plan_demo.rs"
 name = "surface_mem_demo"
 path = "src/bin/surface_mem_demo.rs"
 
+[[bin]]
+name = "proof_demo"
+path = "src/bin/proof_demo.rs"
+
 [profile.release]
 opt-level = 3
 lto = true
