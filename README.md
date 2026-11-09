@@ -178,6 +178,7 @@ proof nat_refl:
 20. [决策记录与开放问题](docs/09-decisions.md)
 21. [表面语法：缩进语法与 S-expression](docs/20-surface-syntax.md)
 22. [语言方向与设想（草案）](docs/21-future-directions.md)
+23. [类型相等：语义同一、表示共享、值相等](docs/22-type-equality.md)
 
 ## 模型优先
 

@@ -129,5 +129,8 @@
 14. **安全**：能力类型/沙箱/供应链的最小可行方案？
 15. **后端**：Cranelift vs LLVM；何时做验证后端？
 
+16. **类型相等**：语义层 nominal、表示层 structural 的默认边界；`newtype`/
+    `alias`/`Repr`/`≃` 的规则见 `docs/22-type-equality.md`。
+
 错误/效果、执行档位、并发、自举、搜索工具和性能基准的候选设计见
 `docs/21-future-directions.md`；其中每一条在采纳前仍需要具体 ADR。
